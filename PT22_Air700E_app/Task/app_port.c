@@ -550,18 +550,18 @@ void GPIOA_IRQHandler(void)
 	    }
     }
 
-	if (iqr & KEY_PIN)
+	if (iqr & PWR_KEY_PIN)
 	{
 		sysinfo.keyPressFlag = 1;
-		if (GPIOA_ReadPortPin(KEY_PIN)) 
+		if (GPIOA_ReadPortPin(PWR_KEY_PIN)) 
 		{
-        	GPIOA_ResetBits(KEY_PIN);
+        	GPIOA_ResetBits(PWR_KEY_PIN);
 	    }
 	    else
 	    {
-	        GPIOA_SetBits(KEY_PIN);
+	        GPIOA_SetBits(PWR_KEY_PIN);
 	    }
-		GPIOA_ClearITFlagBit(KEY_PIN);
+		GPIOA_ClearITFlagBit(PWR_KEY_PIN);
 	}
 	
 	if (iqr & SOS_KEY_PIN)
@@ -617,7 +617,7 @@ void portGpioWakeupIRQHandler(void)
 	if (sysinfo.keyPressFlag)
 	{
 		/* 如果是松开 */
-		if (KEY_READ)
+		if (PWR_KEY_READ)
 		{
 			/*开启任务*/
 			if (sysinfo.kernalRun == 0)
@@ -654,7 +654,7 @@ void portModuleGpioCfg(uint8_t state)
     {
         R16_PB_INT_EN &= ~RING_PIN;
         GPIOB_ModeCfg(DTR_PIN, GPIO_ModeIN_PD);
-        GPIOB_ModeCfg(POWER_PIN, GPIO_ModeIN_PD);
+        //GPIOB_ModeCfg(POWER_PIN, GPIO_ModeIN_PD);
         GPIOB_ModeCfg(RING_PIN, GPIO_ModeIN_PD);
         GPIOA_ModeCfg(RST_PIN, GPIO_ModeIN_PD);
         PORT_SUPPLY_OFF;
@@ -695,7 +695,8 @@ void portGpsGpioCfg(uint8_t onoff)
     }
     else
     {
-		GPIOA_ModeCfg(GPSPWR_PIN, GPIO_ModeIN_PD);
+	    GPIOA_ModeCfg(GPSPWR_PIN, GPIO_ModeOut_PP_5mA);
+	    GPSPWR_OFF;
 		portUartCfg(APPUSART1, 0, 115200, NULL);
     }
 }
@@ -722,23 +723,23 @@ void portLdrGpioCfg(uint8_t onoff)
 }
 
 /**
- * @brief   KEY GPIO初始化
+ * @brief   PWR KEY GPIO初始化
  * @param
  * @return
  */
 
-void portKeyCfg(void)
+void portPwrKeyCfg(void)
 {
 	PWR_PeriphWakeUpCfg( ENABLE, RB_SLP_GPIO_WAKE, Long_Delay );
-	GPIOA_ModeCfg(KEY_PIN, GPIO_ModeIN_Floating);
-	GPIOA_ITModeCfg(KEY_PIN, GPIO_ITMode_RiseEdge);
-	if (GPIOA_ReadPortPin(KEY_PIN)) 
+	GPIOA_ModeCfg(PWR_KEY_PIN, GPIO_ModeIN_PU);
+	GPIOA_ITModeCfg(PWR_KEY_PIN, GPIO_ITMode_FallEdge);
+	if (GPIOA_ReadPortPin(PWR_KEY_PIN)) 
 	{
-    	GPIOA_ResetBits(KEY_PIN);
+    	GPIOA_ResetBits(PWR_KEY_PIN);
     }
     else
     {
-        GPIOA_SetBits(KEY_PIN);
+        GPIOA_SetBits(PWR_KEY_PIN);
     }
 	PFIC_EnableIRQ(GPIO_A_IRQn);
 }
@@ -752,8 +753,8 @@ void portKeyCfg(void)
 void portSosKeyCfg(void)
 {
 	PWR_PeriphWakeUpCfg( ENABLE, RB_SLP_GPIO_WAKE, Long_Delay );
-	GPIOA_ModeCfg(SOS_KEY_PIN, GPIO_ModeIN_Floating);
-	GPIOA_ITModeCfg(SOS_KEY_PIN, GPIO_ITMode_RiseEdge);
+	GPIOA_ModeCfg(SOS_KEY_PIN, GPIO_ModeIN_PU);
+	GPIOA_ITModeCfg(SOS_KEY_PIN, GPIO_ITMode_FallEdge);
 	if (GPIOA_ReadPortPin(SOS_KEY_PIN)) 
 	{
     	GPIOA_ResetBits(SOS_KEY_PIN);

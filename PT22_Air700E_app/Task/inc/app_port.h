@@ -68,8 +68,8 @@
 #define GPSLNA_OFF  
 
 //KEY Éæ¼°IO
-#define KEY_PIN			GPIO_Pin_11		//PA11
-#define KEY_READ		(GPIOA_ReadPortPin(KEY_PIN)?1:0)
+#define PWR_KEY_PIN		GPIO_Pin_11		//PA11
+#define PWR_KEY_READ	(GPIOA_ReadPortPin(PWR_KEY_PIN)?1:0)
 
 //SOSKEY Éæ¼°IO
 #define SOS_KEY_PIN		GPIO_Pin_10		//PA10
@@ -135,7 +135,7 @@ void portLedGpioCfg(uint8_t onoff);
 void portGpsGpioCfg(uint8_t onoff);
 void portMicGpioCfg(void);
 void portLdrGpioCfg(uint8_t onoff);
-void portKeyCfg(void);
+void portPwrKeyCfg(void);
 void portSosKeyCfg(void);
 
 

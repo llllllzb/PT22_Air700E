@@ -39,24 +39,28 @@ static uint8 char1Description[] = "appchar1";
 static gattAttribute_t appAttributeTable[] =
 {
     //Service
-    {   { ATT_BT_UUID_SIZE, primaryServiceUUID }, //type
-        GATT_PERMIT_READ, 0,
-        (uint8 *)& ServiceProfile
+    {   
+    	{ ATT_BT_UUID_SIZE, primaryServiceUUID }, //type
+        GATT_PERMIT_READ, 0, (uint8 *)& ServiceProfile
     },
     //声明特征
-    {   { ATT_BT_UUID_SIZE, characterUUID },
+    {   
+    	{ ATT_BT_UUID_SIZE, characterUUID },
         GATT_PERMIT_READ, 0, &char1_Properties
     },
     //具体特征值
-    {   { ATT_BT_UUID_SIZE, Char1UUID },
+    {   
+    	{ ATT_BT_UUID_SIZE, Char1UUID },
         GATT_PERMIT_READ | GATT_PERMIT_WRITE, 0, char1ValueStore
     },
     //客户端配置用于NOTIFY
-    {   { ATT_BT_UUID_SIZE, clientCharCfgUUID },
+    {   
+    	{ ATT_BT_UUID_SIZE, clientCharCfgUUID },
         GATT_PERMIT_READ | GATT_PERMIT_WRITE, 0, (uint8 *) char1ClientConfig
     },
     //具体特征的用户描述
-    {   { ATT_BT_UUID_SIZE, charUserDescUUID },
+    {   
+    	{ ATT_BT_UUID_SIZE, charUserDescUUID },
         GATT_PERMIT_READ, 0, char1Description
     }
 };
@@ -505,7 +509,8 @@ static void appHidHandleConnStatusCB(uint16 connHandle, uint8 changeType)
         {
             GATTServApp_InitCharCfg(connHandle, char1ClientConfig);
             GATTServApp_InitCharCfg(connHandle, hidReportClientCharCfg);
-            //sysinfo.bleConnStatus = 0;
+            sysinfo.bleConnStatus = 0;
+            LogPrintf(DEBUG_ALL, "ble link terminate");
         }
     }
 
@@ -589,21 +594,13 @@ static void appHidPairStateCB(uint16_t connHandle, uint8_t state, uint8_t status
             uint8_t u8Value;
             GAPBondMgr_GetParameter( GAPBOND_BOND_COUNT, &u8Value );
             LogPrintf(DEBUG_ALL, "Bonded device count :%d", u8Value);
-
-//            if(u8Value)
-//            {
-//                uint8_t sync_resolve_list = TRUE;
-//                GAPBondMgr_SetParameter(GAPBOND_AUTO_SYNC_RL,sizeof(sync_resolve_list),&sync_resolve_list);
-//
-//                uint8_t filter_policy = GAP_FILTER_POLICY_WHITE;//GAP_FILTER_POLICY_WHITE_SCAN;
-//                GAPRole_SetParameter( GAPROLE_ADV_FILTER_POLICY, sizeof( uint8_t ), &filter_policy );
-//            }
+			sysinfo.bleConnStatus = 1;
 			break;
 		//已经绑定配对过的设备会直接进入这个状态，以上的状态忽略
 		case GAPBOND_PAIRING_STATE_BONDED:
 			LogMessage(DEBUG_ALL, "Paring Bonded");
 			tmos_set_event(appHidTaskId, APP_HID_VERIFY_EVENT);
-			//sysinfo.bleConnStatus = 1;
+			sysinfo.bleConnStatus = 1;
 			break;
 		default :
 			LogMessage(DEBUG_ALL, "Unknow Pairing State");
@@ -640,49 +637,35 @@ static void appHidStateNotify(gapRole_States_t newState, gapRoleEvent_t *pEvent)
 			GAPRole_GetParameter(GAPROLE_BD_ADDR, addr);
 			GAP_ConfigDeviceAddr(ADDRTYPE_STATIC, addr);
 			break;
-
 		case GAPROLE_ADVERTISING:
 			if (pEvent->gap.opcode == GAP_MAKE_DISCOVERABLE_DONE_EVENT)
 			{
 				LogMessage(DEBUG_ALL, "GAPROLE Advertising..");
 			}
-			/*广播状态下出现断连事件*/
-			else if (pEvent->gap.opcode == GAP_LINK_TERMINATED_EVENT)
-			{
-				LogPrintf(DEBUG_ALL, "Disconnected.. Reason:0x%x", pEvent->linkTerminate.reason);
-				appHidHandleConnStatusCB(appHidConn.connectionHandle, LINKDB_STATUS_UPDATE_REMOVED);
-//				if (sysparam.sysOnoff == 1)
-//				{
-//					/*先关广播，再开启*/
-//					appHidBroadcastTypeCtl(0, 0);
-//				}
-			}
 			break;
 		case GAPROLE_WAITING:
-			/*无广播状态下广播关闭事件*/
+			/* 无广播状态下广播关闭事件 */
 			if (pEvent->gap.opcode == GAP_END_DISCOVERABLE_DONE_EVENT)
             {
                 LogMessage(DEBUG_ALL, "Waiting for advertising..");
-//                if (sysparam.sysOnoff == 1)
-//                {
-//                	/*开启可连接广播*/
-//					appHidBroadcastTypeCtl(1, 0);
-//                }
+                if (sysparam.pwrOnoff == 1)
+                {
+					appHidBroadcastCtl(1);
+                }
             }
-            /*无广播状态下出现断连事件*/
+            /* 无广播状态下出现断连事件 */
             else if (pEvent->gap.opcode == GAP_LINK_TERMINATED_EVENT)
             {
 				LogPrintf(DEBUG_ALL, "Disconnected.. Reason:0x%x", pEvent->linkTerminate.reason);
 				appHidHandleConnStatusCB(appHidConn.connectionHandle, LINKDB_STATUS_UPDATE_REMOVED);
-//				if (sysparam.sysOnoff == 1)
-//				{
-//					/*先关广播，再开启*/
-//					appHidBroadcastTypeCtl(0, 0);
-//				}
+                if (sysparam.pwrOnoff == 1)
+                {
+					appHidBroadcastCtl(1);
+                }
             }
 			break;
 		case GAPROLE_CONNECTED:
-			if(pEvent->gap.opcode == GAP_LINK_ESTABLISHED_EVENT)
+			if (pEvent->gap.opcode == GAP_LINK_ESTABLISHED_EVENT)
 			{
 			    appHidConn.connectionHandle = pEvent->linkCmpl.connectionHandle;
 				LogMessage(DEBUG_ALL, "GAPROLE Connecting..");
@@ -693,11 +676,7 @@ static void appHidStateNotify(gapRole_States_t newState, gapRoleEvent_t *pEvent)
                 LogPrintf(DEBUG_ALL, "addr:%s, addrtype:%d", debug, pEvent->linkCmpl.devAddrType);
                 tmos_memcpy(appHidConn.addr, pEvent->linkCmpl.devAddr, 6);
                 appHidConn.addrType = pEvent->linkCmpl.devAddrType;
-
-				//开启不可链接广播
-				appHidBroadcastTypeCtl(1, 1);
-                //鉴权
-                //tmos_set_event(appHidTaskId, APP_HID_VERIFY_EVENT);
+				//appHidBroadcastCtl(1, 1);
 			}
 			break;
 		case GAPROLE_CONNECTED_ADV:
@@ -802,7 +781,6 @@ uint16_t apphidProcessEvent(tmosTaskID task_id, tmosEvents events)
 	if (events & APP_HID_PARAM_UPDATE_EVENT)
 	{
 	    uint8_t u8val;
-
 		u8val = GAPRole_PeripheralConnParamUpdateReq(appHidConn.connectionHandle, 8, 8, 0, 500, appHidTaskId);
 		return events ^ APP_HID_PARAM_UPDATE_EVENT;
 	}
@@ -854,10 +832,6 @@ void appHidBroadcasterCfg(uint8_t *devName)
 	advertData[advertLen++] = GAP_ADTYPE_FLAGS_LIMITED | GAP_ADTYPE_FLAGS_BREDR_NOT_SUPPORTED;
 	
 	GAPRole_SetParameter(GAPROLE_ADVERT_DATA, advertLen, advertData);
-	u8Value = GAP_ADTYPE_ADV_IND;
-	GAPRole_SetParameter(GAPROLE_ADV_EVENT_TYPE, sizeof(uint8_t), &u8Value);
-	u8Value = TRUE;
-	GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(u8Value), &u8Value);
 
 	//配置GGS服务的Device name特征的特征值
 	GGS_SetParameter(GGS_DEVICE_NAME_ATT, GAP_DEVICE_NAME_LEN, (void *)devName);
@@ -866,7 +840,7 @@ void appHidBroadcasterCfg(uint8_t *devName)
 void appHidDeviveNameCfg(void)
 {
     char name[30] = { 0 };
-    sprintf(name, "PT22-%s", dynamicParam.SN + 11);
+    sprintf(name, "PT22-%s", dynamicParam.SN + 9);
     LogPrintf(DEBUG_ALL, "appHidDeviveNameCfg==>%s", name);
     appHidBroadcasterCfg(name);
 }
@@ -874,14 +848,12 @@ void appHidDeviveNameCfg(void)
 void appHidScanRspDataCfg(void)
 {
     uint8_t scanRspData[] = {
-            0x05, // length of this data
-            GAP_ADTYPE_16BIT_MORE,
-            LO_UINT16(HID_SERV_UUID),
-            HI_UINT16(HID_SERV_UUID),
-            LO_UINT16(BATT_SERV_UUID),
-            HI_UINT16(BATT_SERV_UUID),
-    };
-
+        0x05, // length of this data
+        GAP_ADTYPE_16BIT_MORE,
+        LO_UINT16(HID_SERV_UUID),
+        HI_UINT16(HID_SERV_UUID),
+        LO_UINT16(BATT_SERV_UUID),
+        HI_UINT16(BATT_SERV_UUID),};
     GAPRole_SetParameter(GAPROLE_SCAN_RSP_DATA, sizeof(scanRspData), scanRspData);
 }
 /*
@@ -912,12 +884,6 @@ void appHidPeripheralInit(void)
 	GAPBondMgr_SetParameter(GAPBOND_PERI_IO_CAPABILITIES, sizeof(uint8_t), &ioCap);
 	GAPBondMgr_SetParameter(GAPBOND_PERI_BONDING_ENABLED, sizeof(uint8_t), &bonding);
 
-//	//白名单模式
-//	uint8_t policy = GAP_FILTER_POLICY_ALL;
-//	GAPBondMgr_SetParameter(GAPROLE_ADV_FILTER_POLICY, sizeof(policy), &policy);
-	uint8_t u8Value;
-	u8Value = GAP_ADTYPE_ADV_IND;
-	GAPRole_SetParameter(GAPROLE_ADV_EVENT_TYPE, sizeof(uint8_t), &u8Value);
 
 	//广播配置并使能
 	GAP_SetParamValue(TGAP_DISC_ADV_INT_MIN, 160);
@@ -926,6 +892,10 @@ void appHidPeripheralInit(void)
 	appHidDeviveNameCfg();
 	//扫描应答数据配置
 	appHidScanRspDataCfg();
+	if (sysparam.pwrOnoff)
+		appHidBroadcastCtl(1);
+	else
+		appHidBroadcastCtl(0);
 	//添加服务(苹果手机无法配对和特征表有关)
 	appHidAddService();
 
@@ -1075,30 +1045,24 @@ void appHidTerminalLink(void)
     //sysinfo.bleConnStatus = 0;
 }
 
-void appHidBroadcastTypeCtl(uint8_t onoff, uint8_t type)
+//控制蓝牙开启关闭
+void appHidBroadcastCtl(uint8_t onoff)
 {
-	uint8_t u8Value;
+	uint8_t u8Val;
 	if (onoff)
 	{
-		if (type == 0)
-		{
-			u8Value = GAP_ADTYPE_ADV_IND;
-			GAPRole_SetParameter(GAPROLE_ADV_EVENT_TYPE, sizeof(uint8_t), &u8Value);
-			u8Value = TRUE;
-			GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t), &u8Value);
-		}
-		else if (type == 1)
-		{
-			u8Value = GAP_ADTYPE_ADV_NONCONN_IND;
-			GAPRole_SetParameter(GAPROLE_ADV_EVENT_TYPE, sizeof(uint8_t), &u8Value);
-			u8Value = TRUE;
-			GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t), &u8Value);
-		}
+		u8Val = GAP_ADTYPE_ADV_IND;
+		GAPRole_SetParameter(GAPROLE_ADV_EVENT_TYPE, sizeof(uint8_t), &u8Val);
+		u8Val = TRUE;
+		GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t), &u8Val);
 	}
-	else 
+	else
 	{
-		u8Value = FALSE;
-		GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t), &u8Value);
+		u8Val = FALSE;
+		GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t), &u8Val);
 	}
+	LogPrintf(DEBUG_ALL, "%s==>%s", __FUNCTION__, onoff ? "enable" : "disable");
 }
+
+
 

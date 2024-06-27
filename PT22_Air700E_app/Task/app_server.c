@@ -1024,6 +1024,8 @@ static void agpsServerConnTask(void)
 	if (agpsServConn.runTick++ > 180)
 	{
 		LogPrintf(DEBUG_ALL, "agps timeout:%d", agpsServConn.runTick);
+		socketDel(AGPS_LINK);
+        agpsRequestClear();
 	}
     gpsinfo = getCurrentGPSInfo();
     if (isModuleRunNormal() == 0)

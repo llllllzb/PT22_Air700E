@@ -575,7 +575,7 @@ void moduleRequestTask(void)
 		}
 		break;
 	case MODULE_FSM_CLOSE_ING2:
-		if (++sysinfo.moduleFsmTick > 20)	//2000ms
+		if (++sysinfo.moduleFsmTick > 30)	//2000ms
 		{
 			PWRKEY_HIGH;
 			LogMessage(DEBUG_ALL, "modulePowerOffDone");
@@ -848,7 +848,7 @@ void netConnectTask(void)
                 netSetCgdcong((char *)sysparam.apn);
                 //修改APN鉴权方式的这个指令发了会卡顿
                 //netSetApn((char *)sysparam.apn, (char *)sysparam.apnuser, (char *)sysparam.apnpassword, sysparam.apnAuthport);
-                sendModuleCmd(CGSN_CMD, NULL);
+                sendModuleCmd(CGSN_CMD, "1");
                 changeProcess(CSQ_STATUS);
             }
             else
@@ -953,7 +953,7 @@ void netConnectTask(void)
             sendModuleCmd(CIPRXGET_CMD, "5");
             sendModuleCmd(CFG_CMD, "\"urcdelay\",100");
             sendModuleCmd(CIMI_CMD, NULL);
-            sendModuleCmd(CGSN_CMD, NULL);
+            sendModuleCmd(CGSN_CMD, "1");
             sendModuleCmd(ICCID_CMD, NULL);
             queryBatVoltage();
             //netSetCstt((char *)sysparam.apn, (char *)sysparam.apnuser, (char *)sysparam.apnpassword);
@@ -1475,7 +1475,14 @@ static void wifiscanParser(uint8_t *buf, uint16_t len)
     }
 }
 
-//867387060171504
+/*
+AT+CGSN=1
++CGSN: "861959062037101"
+
+AT+CGSN
+861959062037101
+
+*/
 static void cgsnParser(uint8_t *buf, uint16_t len)
 {
     int16_t index;
@@ -1484,10 +1491,12 @@ static void cgsnParser(uint8_t *buf, uint16_t len)
     uint8_t i;
     rebuf = buf;
     relen = len;
-    index = getCharIndex(rebuf, relen, '\n');
-    rebuf = rebuf + index + 1;
-    relen = relen - index - 1;
-    index = getCharIndex(rebuf, relen, '\r');
+    
+    index = my_getstrindex((char *)rebuf, "+CGSN:", relen);
+    rebuf += index + 8;
+    relen -= index + 8;
+	
+    index = getCharIndex(rebuf, relen, '"');
     if (index >= 0 && index < 20)
     {
         for (i = 0; i < index; i++)

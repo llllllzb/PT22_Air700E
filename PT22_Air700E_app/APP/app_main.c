@@ -50,6 +50,7 @@ int main(void)
     myTaskPreInit();
     CH58X_BLEInit();
     HAL_Init();
+    //上电初始化蓝牙
     appHidPeripheralInit();
     //appCentralInit();
     myTaskInit();

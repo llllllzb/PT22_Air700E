@@ -69,7 +69,7 @@
 #define ACC_STATE_OFF	0
 
 #define BAT_DET_TIME			4
-#define BAT_DET_CAN_RUN_VOL		3.4
+#define BAT_DET_CAN_RUN_VOL		3.3
 #define BAT_DET_CANNOT_RUN_VOL  3.0
 
 #define DEV_EXTEND_OF_MY	0x01

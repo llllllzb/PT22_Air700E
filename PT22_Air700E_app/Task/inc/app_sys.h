@@ -70,6 +70,7 @@ typedef struct
 	uint8_t moduleSupplyStatus		: 1;
 	uint8_t delMsgReq				: 1;
 	uint8_t sosKeyPressFlag			: 1;
+	uint8_t bleConnStatus       	: 1;
     uint8_t lbsExtendEvt;
     uint8_t wifiExtendEvt;
     uint8_t ringWakeUpTick;

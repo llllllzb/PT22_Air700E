@@ -117,6 +117,7 @@ typedef struct
 	uint8_t pwrDone;	//限制按键按来按去
 	uint8_t gpioSel;
 	uint16_t motionstep;
+	uint8_t hiden;
 } systemParam_s;
 
 /*存在EEPROM里的动态参数*/
@@ -136,8 +137,6 @@ typedef struct
     int32_t rtcOffset;
     int32_t saveLat;
 	int32_t saveLon;
-	uint32_t step1;		//当天总步数，存储起来防止复位后当天步数丢失
-	uint32_t step2;		//当天总步数，存储起来防止复位后当天步数丢失
 	uint32_t step;		//当天总步数，存储起来防止复位后当天步数丢失
 }dynamicParam_s;
 

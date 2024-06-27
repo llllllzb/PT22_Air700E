@@ -155,6 +155,10 @@ static void doAtdebugCmd(uint8_t *buf, uint16_t len)
     {
 		PORT_RSTKEY_L;
     }
+    else if (mycmdPatch((uint8_t *)item.item_data[0], (uint8_t *)"MODESTOP"))
+    {
+		modeTryToStop();
+    }
     else
     {
         if (item.item_data[0][0] >= '0' && item.item_data[0][0] <= '9')

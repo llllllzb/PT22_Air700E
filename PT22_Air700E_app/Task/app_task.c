@@ -14,6 +14,7 @@
 #include "app_server.h"
 #include "app_jt808.h"
 #include "app_central.h"
+#include "app_hid.h"
 
 #define SYS_LED1_ON       LED1_ON
 #define SYS_LED1_OFF      LED1_OFF
@@ -2602,7 +2603,7 @@ static void gsCheckTask(void)
 
 void systemShutDownCB(void)
 {
-	tmos_start_task(sysinfo.taskId, APP_TASK_SYSTEM_SHUTDOWN_EVENT, MS1_TO_SYSTEM_TIME(3000));
+	tmos_start_task(sysinfo.taskId, APP_TASK_SYSTEM_SHUTDOWN_EVENT, MS1_TO_SYSTEM_TIME(1000));
 }
 
 /**************************************************
@@ -2628,7 +2629,7 @@ uint8_t isKeyPressInProgress(void)
 #define KEY_OFF		0
 #define KEY_RESULT_PRESS	1
 #define KEY_RESULT_CLICK	2
-#define KEY_LONG_PRESS_TIME		25
+#define KEY_LONG_PRESS_TIME		10
 void keyScan(void)
 {
 	/* 判断长按按键 */
@@ -2641,7 +2642,7 @@ void keyScan(void)
 	static uint8_t once = 0;		//0：检测到松开过按键	1:已经判断为一种按键方式了 如果不松开继续按下去是不会判断新的按键方式的  用于防止一直按着键不放
 	/* 按键类型判断结果 */
 	uint8_t result = 0;
-    if (KEY_READ == KEY_ON)//发现按键被按下或者被按下过
+    if (PWR_KEY_READ == KEY_ON)//发现按键被按下或者被按下过
     {
     	sysinfo.keypress = 1;
     	//正在处理开关机逻辑，不再计算按键按下的时间
@@ -2681,7 +2682,7 @@ void keyScan(void)
         clicktime = 5;
     }
     //松开按键
-    if (KEY_READ == KEY_OFF)
+    if (PWR_KEY_READ == KEY_OFF)
     {
     	sysinfo.keypress = 0;
     	if (cnt < KEY_LONG_PRESS_TIME && cnt > 0)
@@ -2721,9 +2722,11 @@ void keyScan(void)
 		    sysinfo.lbsExtendEvt = 0;
 		    portLdrGpioCfg(0);
 			portGsensorCtl(0);
-			alarmRequestSet(ALARM_SHUTDOWN_REQUEST);
 			ledStatusUpdate(SYSTEM_LED_RUN, 0);
 			sysinfo.pwrDone = 1;
+			//关闭蓝牙
+			appHidBroadcastCtl(0);
+			//如果关机前需要做特定的操作就使用systemShutDownCB,不需要特定操作直接切换到modedone/modestop就好了
 			systemShutDownCB();
 			paramSaveAll();
 		}
@@ -2735,6 +2738,7 @@ void keyScan(void)
 			sysinfo.pwrDone = 1;
 			sysinfo.ledTick = 180;
 			ledStatusUpdate(SYSTEM_LED_RUN, 1);
+			appHidBroadcastCtl(1);
 			paramSaveAll();
 		}
 		else
@@ -3018,7 +3022,7 @@ void myTaskPreInit(void)
     portAdcCfg(1);
 	portLdrGpioCfg(0);
     portWdtCfg();
-    portKeyCfg();
+    portPwrKeyCfg();
     portSosKeyCfg();
     bleTryInit();
     socketListInit();
@@ -3130,7 +3134,7 @@ static tmosEvents myTaskEventProcess(tmosTaskID taskID, tmosEvents events)
         LogMessage(DEBUG_ALL, "Task kernal stop");
         sysinfo.kernalRun = 0;
         motionClear();
-        /*关闭所有IO*/
+        /* 关闭所有IO */
 		portAdcCfg(0);
 		portModuleGpioCfg(0);
 		portGpsGpioCfg(0);

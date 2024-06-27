@@ -114,6 +114,7 @@ void paramDefaultInit(uint8_t level)
     sysparam.motionstep = 30;
     sysparam.lowvoltage = 34;
     dynamicParam.step = 0;
+    sysparam.hiden = 1;
     dynamicParamSaveAll();
     paramSaveAll();
 }
