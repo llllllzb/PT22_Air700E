@@ -3116,7 +3116,6 @@ static tmosEvents myTaskEventProcess(tmosTaskID taskID, tmosEvents events)
     if (events & APP_TASK_RUN_EVENT)
     {
         LogMessage(DEBUG_ALL, "Task kernal start");
-    
         sysinfo.kernalRun = 1;
         /*÷ÿ–¬≈‰÷√IO*/
 		portModuleGpioCfg(1);
@@ -3124,7 +3123,6 @@ static tmosEvents myTaskEventProcess(tmosTaskID taskID, tmosEvents events)
 		portLedGpioCfg(1);
 		portAdcCfg(1);
 		portWdtCfg();
-		
         tmos_start_reload_task(sysinfo.taskId, APP_TASK_KERNAL_EVENT, MS1_TO_SYSTEM_TIME(100));
         return events ^ APP_TASK_RUN_EVENT;
     }

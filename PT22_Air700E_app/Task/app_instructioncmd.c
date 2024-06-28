@@ -839,10 +839,10 @@ void doDebugInstrucion(ITEM *item, char *message)
             sysinfo.sysTick / 3600, sysinfo.sysTick % 3600 / 60, sysinfo.sysTick % 60, sysinfo.gpsRequest,
             sysinfo.gpsUpdatetick / 3600, sysinfo.gpsUpdatetick % 3600 / 60, sysinfo.gpsUpdatetick % 60);
     sprintf(message + strlen(message), "hideLogin:%s;", hiddenServerIsReady() ? "Yes" : "No");
-	sprintf(message + strlen(message), "runFsm:%d wifiExtendEvt:0x%02x alarmreq:0x%02x", 
+	sprintf(message + strlen(message), "runFsm:%d wifiExtendEvt:0x%02x alarmreq:0x%02x;", 
 										sysinfo.runFsm, sysinfo.wifiExtendEvt, sysinfo.alarmRequest);
+	sprintf(message + strlen(message), "pwronoff:%d", sysparam.pwrOnoff);
 	sprintf(message + strlen(message), "PWR_KEY_READ:%d SOS_KEY_READ:%d", PWR_KEY_READ, SOS_KEY_READ);
-	
 }
 
 void doACCCTLGNSSInstrucion(ITEM *item, char *message)

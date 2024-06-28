@@ -616,18 +616,31 @@ void portGpioWakeupIRQHandler(void)
 	}
 	if (sysinfo.keyPressFlag)
 	{
-		/* 如果是松开 */
 		if (PWR_KEY_READ)
 		{
-			/*开启任务*/
+			/* 开启任务 */
 			if (sysinfo.kernalRun == 0)
 			{
 				wakeUpByInt(2, 3);
 				tmos_set_event(sysinfo.taskId, APP_TASK_RUN_EVENT);
-				LogPrintf(DEBUG_ALL, "key moving..");
+				LogPrintf(DEBUG_ALL, "pwr key..");
 			}
 		}
 		sysinfo.keyPressFlag = 0;
+	}
+	if (sysinfo.sosKeyPressFlag)
+	{
+		sysinfo.sosKeyPressFlag = 0;
+		if (SOS_KEY_READ == 0)
+		{
+			/* 开启任务 */
+			if (sysinfo.kernalRun == 0)
+			{
+				wakeUpByInt(2, 3);
+				tmos_set_event(sysinfo.taskId, APP_TASK_RUN_EVENT);
+				LogPrintf(DEBUG_ALL, "sos key..");
+			}
+		}
 	}
 }
 

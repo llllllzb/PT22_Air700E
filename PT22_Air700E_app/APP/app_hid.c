@@ -510,7 +510,7 @@ static void appHidHandleConnStatusCB(uint16 connHandle, uint8 changeType)
             GATTServApp_InitCharCfg(connHandle, char1ClientConfig);
             GATTServApp_InitCharCfg(connHandle, hidReportClientCharCfg);
             sysinfo.bleConnStatus = 0;
-            LogPrintf(DEBUG_ALL, "ble link terminate");
+            LogPrintf(DEBUG_ALL, "ble link[%d] terminate", connHandle);
         }
     }
 
@@ -673,7 +673,7 @@ static void appHidStateNotify(gapRole_States_t newState, gapRoleEvent_t *pEvent)
                 memcpy(debug, pEvent->linkCmpl.devAddr, 6);
                 byteToHexString(pEvent->linkCmpl.devAddr, debug, 6);
                 debug[12] = 0;
-                LogPrintf(DEBUG_ALL, "addr:%s, addrtype:%d", debug, pEvent->linkCmpl.devAddrType);
+                LogPrintf(DEBUG_ALL, "connhandle:%d addr:%s, addrtype:%d", appHidConn.connectionHandle, debug, pEvent->linkCmpl.devAddrType);
                 tmos_memcpy(appHidConn.addr, pEvent->linkCmpl.devAddr, 6);
                 appHidConn.addrType = pEvent->linkCmpl.devAddrType;
 				//appHidBroadcastCtl(1, 1);
@@ -694,7 +694,7 @@ static void appHidRssiRead(uint16_t connHandle, int8_t newRSSI)
 	LogPrintf(DEBUG_ALL, "ConnHanle %d, Rssi %d", connHandle, newRSSI);
 }
 
-static void appHidParamUpdate( uint16_t connHandle, uint16_t connInterval,
+static void appHidParamUpdate(uint16_t connHandle, uint16_t connInterval,
     uint16_t connSlaveLatency, uint16_t connTimeout)
 {
     LogPrintf(DEBUG_ALL, "Param Update==>connectHandle %d, connInterval %d", connHandle, connInterval);
@@ -723,17 +723,20 @@ static void appGapMsgProcess(gapRoleEvent_t *pMsg)
 			break;
 		case GAP_PHY_UPDATE_EVENT:
 //            LogMessage(DEBUG_ALL, "-------------------------------------");
-//            LogMessage(DEBUG_ALL, "*****LinkPhyUpdate*****\r\n");
+            LogMessage(DEBUG_ALL, "*****LinkPhyUpdate*****\r\n");
 //            LogPrintf(DEBUG_ALL, "connHandle:%d\r\n", pMsg->linkPhyUpdate.connectionHandle);
 //            LogPrintf(DEBUG_ALL, "connRxPHYS:%d\r\n", pMsg->linkPhyUpdate.connRxPHYS);
 //            LogPrintf(DEBUG_ALL, "connTxPHYS:%d\r\n", pMsg->linkPhyUpdate.connTxPHYS);
 //            LogMessage(DEBUG_ALL, "-------------------------------------");
 			break;
 		case GAP_LINK_PARAM_UPDATE_EVENT:
-		    LogMessage(DEBUG_ALL, "Param Update");
-
+			LogMessage(DEBUG_ALL, "-----------------Param Update----------------");
+			LogPrintf(DEBUG_ALL, "connHandle:%d\r\n", pMsg->linkUpdate.connectionHandle);
+			LogPrintf(DEBUG_ALL, "connInterval:%d\r\n", pMsg->linkUpdate.connInterval);
+			LogPrintf(DEBUG_ALL, "connLatency:%d\r\n", pMsg->linkUpdate.connLatency);
+			LogPrintf(DEBUG_ALL, "connTimeout:%d\r\n", pMsg->linkUpdate.connTimeout);
+			LogMessage(DEBUG_ALL, "---------------------------------------------");
 		    break;
-
 	}
 }
 
@@ -748,7 +751,7 @@ static void appGattMsgProcess(gattMsgEvent_t *pMsg)
 static void appHidProcessTMOSMsg(tmos_event_hdr_t *Msg)
 {
 	LogPrintf(DEBUG_ALL, "appHidProcessTMOSMsg==>MsgEvent:0x%x, MsgStatus:0x%x", Msg->event, Msg->status);
-	switch(Msg->event)
+	switch (Msg->event)
 	{
 		case GAP_MSG_EVENT:
 			appGapMsgProcess((gapRoleEvent_t *)Msg);
@@ -782,12 +785,13 @@ uint16_t apphidProcessEvent(tmosTaskID task_id, tmosEvents events)
 	{
 	    uint8_t u8val;
 		u8val = GAPRole_PeripheralConnParamUpdateReq(appHidConn.connectionHandle, 8, 8, 0, 500, appHidTaskId);
+		LogPrintf(DEBUG_ALL, "ble[%d]try to update param, status:%d", appHidConn.connectionHandle, u8val);
 		return events ^ APP_HID_PARAM_UPDATE_EVENT;
 	}
 	
 	if (events & APP_HID_SEND_DATA_TEST_EVENT)
 	{
-
+		
 	    return events ^ APP_HID_SEND_DATA_TEST_EVENT;
 	}
 
