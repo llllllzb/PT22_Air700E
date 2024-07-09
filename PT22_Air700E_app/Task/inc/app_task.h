@@ -2,6 +2,7 @@
 #define APP_TASK
 #include <stdint.h>
 #include "app_central.h"
+#include "app_gps.h"
 #define SYSTEM_LED_RUN					0X01
 #define SYSTEM_LED_NETOK				0X02
 #define SYSTEM_LED_GPSOK				0X04	//∆’Õ®GPS
@@ -183,6 +184,8 @@ void wifiRspSuccess(void);
 void wifiRequestClear(void);
 void saveGpsHistory(void);
 void icoeGpsReset(void);
+void icoeGpsInjectAidTime(uint16_t year, uint8_t month, uint8_t date, uint8_t hour, uint8_t minute, uint8_t second);
+void icoeGpsInjectLatLon(gpsinfo_s *gpsinfo);
 
 void gpsRequestSet(uint32_t flag);
 void gpsRequestClear(uint32_t flag);

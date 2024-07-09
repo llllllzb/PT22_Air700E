@@ -48,6 +48,7 @@ typedef enum
     QSCLK_CMD,
     CFUN_CMD,
 	ATA_CMD,
+	COPS_CMD,
 	CBC_CMD,
 	CIPMUX_CMD,
 	CIPSTART_CMD,

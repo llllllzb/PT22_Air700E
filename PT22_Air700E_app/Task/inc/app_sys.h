@@ -38,6 +38,14 @@
 #define HIDDEN_LINK				3
 #define AGPS_LINK				4
 
+
+#define XOR_CRC_TOTAL(str, len, crc)	\
+do										\
+{	uint8_t i;							\
+	for (i = 0; i < len; i++){			\
+		crc ^= *(str + i);	}			\
+}while(0)                             
+
 typedef struct
 {
     unsigned char item_cnt;

@@ -52,6 +52,10 @@ typedef struct
     uint8_t hadupload;
     uint8_t beidouCn[30];
     uint8_t gpsCn[30];
+
+    double src_lat;
+    double src_lon;
+    float src_alt;
 } gpsinfo_s;
 
 typedef enum

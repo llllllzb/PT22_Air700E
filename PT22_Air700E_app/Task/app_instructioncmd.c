@@ -2,7 +2,7 @@
 #include "app_instructioncmd.h"
 
 #include "app_peripheral.h"
-
+#include "app_hid.h"
 #include "app_gps.h"
 #include "app_kernal.h"
 #include "app_net.h"
@@ -841,7 +841,8 @@ void doDebugInstrucion(ITEM *item, char *message)
     sprintf(message + strlen(message), "hideLogin:%s;", hiddenServerIsReady() ? "Yes" : "No");
 	sprintf(message + strlen(message), "runFsm:%d wifiExtendEvt:0x%02x alarmreq:0x%02x;", 
 										sysinfo.runFsm, sysinfo.wifiExtendEvt, sysinfo.alarmRequest);
-	sprintf(message + strlen(message), "pwronoff:%d", sysparam.pwrOnoff);
+	sprintf(message + strlen(message), "pwronoff:%d bleconn:%d bondcnt:%d", 
+										sysparam.pwrOnoff, sysinfo.bleConnStatus, appHidGetBondCount());
 	sprintf(message + strlen(message), "PWR_KEY_READ:%d SOS_KEY_READ:%d", PWR_KEY_READ, SOS_KEY_READ);
 }
 

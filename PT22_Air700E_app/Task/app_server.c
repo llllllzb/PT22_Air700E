@@ -1062,7 +1062,9 @@ static void agpsServerConnTask(void)
     switch (agpsServConn.fsm)
     {
     	case AGPS_INIT:
-			icoeGpsReset();
+    		if (!(gpsinfo->pdop < 4.0 && gpsinfo->speed > 0.0 && 
+    			  gpsinfo->latitude != 0.0 && gpsinfo->longtitude != 0.0))
+				icoeGpsReset();
 			agpsServerChangeFsm(AGPS_WAIT);
     		break;
     	case AGPS_WAIT:

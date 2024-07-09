@@ -83,12 +83,12 @@ static void doAtdebugCmd(uint8_t *buf, uint16_t len)
     }
     else if (mycmdPatch((uint8_t *)item.item_data[0], (uint8_t *)"DTRH"))
     {
-        WAKEMODULE;
+        SLEEPMODULE;
         LogMessage(DEBUG_ALL, "DTR high");
     }
     else if (mycmdPatch((uint8_t *)item.item_data[0], (uint8_t *)"DTRL"))
     {
-        SLEEPMODULE;
+        WAKEMODULE;
         LogMessage(DEBUG_ALL, "DTR low");
     }
     else if (mycmdPatch((uint8_t *)item.item_data[0], (uint8_t *)"POWERKEYH"))
@@ -155,9 +155,25 @@ static void doAtdebugCmd(uint8_t *buf, uint16_t len)
     {
 		PORT_RSTKEY_L;
     }
+    else if (mycmdPatch((uint8_t *)item.item_data[0], (uint8_t *)"AGPSON"))
+    {
+		agpsRequestSet();
+    }
     else if (mycmdPatch((uint8_t *)item.item_data[0], (uint8_t *)"MODESTOP"))
     {
 		modeTryToStop();
+    }
+    else if (mycmdPatch((uint8_t *)item.item_data[0], (uint8_t *)"AIDTIME"))
+    {
+    	uint16 year = 0;
+    	uint8  month = 0, date = 0, hour = 0, minute = 0, second = 0;
+    	portGetRtcDateTime(&year, &month, &date, &hour, &minute, &second);
+		icoeGpsInjectAidTime(year, month, date, hour, minute, second);
+    }
+    else if (mycmdPatch((uint8_t *)item.item_data[0], (uint8_t *)"AIDPOS"))
+    {
+    	gpsinfo_s *gpsinfo = getCurrentGPSInfo();
+		icoeGpsInjectLatLon(gpsinfo);
     }
     else
     {
@@ -545,7 +561,7 @@ void atCmdParserFunction(uint8_t *buf, uint16_t len)
     }
     else
     {
-        createNode(buf, len, 0);
-        //portUartSend(&usart1_ctl, (uint8_t *)buf, len);
+        //createNode(buf, len, 0);
+        portUartSend(&usart3_ctl, (uint8_t *)buf, len);
     }
 }

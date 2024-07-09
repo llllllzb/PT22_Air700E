@@ -97,6 +97,7 @@ void parse_RMC(GPSITEM *item)
     if (item->item_data[3][0] != 0)
     {
         gpsinfo->latitude = atof(item->item_data[3]);
+        gpsinfo->src_lat = gpsinfo->latitude;
     }
     if (item->item_data[4][0] != 0)
     {
@@ -106,6 +107,7 @@ void parse_RMC(GPSITEM *item)
     if (item->item_data[5][0] != 0)
     {
         gpsinfo->longtitude = atof(item->item_data[5]);
+        gpsinfo->src_lon = gpsinfo->longtitude;
     }
     if (item->item_data[6][0] != 0)
     {
@@ -308,6 +310,7 @@ void parse_GGA(GPSITEM *item)
     if (item->item_data[9][0] != 0)
     {
         gpsinfo->hight = atof(item->item_data[9]);
+        gpsinfo->src_alt = gpsinfo->hight;
     }
 }
 
@@ -725,10 +728,12 @@ void showgpsinfo(void)
             gpsinfo->datetime.hour, gpsinfo->datetime.minute, gpsinfo->datetime.second);
     sprintf(debug + strlen(debug), "%c %f %c %f;\n", gpsinfo->NS, gpsinfo->latitude, gpsinfo->EW, gpsinfo->longtitude);
     sprintf(debug + strlen(debug), "%s;", gpsinfo->fixstatus ? "FIXED" : "Invalid");
+    sprintf(debug + strlen(debug), "Altitude=%.2f;", gpsinfo->hight);
     sprintf(debug + strlen(debug), "Speed=%.2f;", gpsinfo->speed);
     sprintf(debug + strlen(debug), "Accuracy=%d;", gpsinfo->fixAccuracy);
     sprintf(debug + strlen(debug), "PDOP=%.2f;Fixmode=%d;", gpsinfo->pdop, gpsinfo->fixmode);
-    sprintf(debug + strlen(debug), "Use Star=%d;", gpsinfo->used_star);
+    sprintf(debug + strlen(debug), "Use Star=%d;\n", gpsinfo->used_star);
+    sprintf(debug + strlen(debug), "SRC %c %lf %c %lf %f;\n", gpsinfo->NS, gpsinfo->src_lat, gpsinfo->EW, gpsinfo->src_lon, gpsinfo->src_alt);
     sprintf(debug + strlen(debug), "GPS CN:");
     total = sizeof(gpsinfo->gpsCn);
     for (i = 0; i < total; i++)

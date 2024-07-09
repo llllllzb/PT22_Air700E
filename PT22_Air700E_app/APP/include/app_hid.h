@@ -43,7 +43,8 @@
 
 
 
-typedef struct{
+typedef struct
+{
     uint16_t connectionHandle;   //!< Connection Handle from controller used to ref the device
     uint8_t connRole;            //!< Connection formed as Master or Slave
     uint16_t connInterval;       //!< Connection Interval
@@ -51,6 +52,7 @@ typedef struct{
     uint16_t connTimeout;        //!< Connection Timeout
     uint8_t *addr;
     uint8_t addrType;
+    uint8_t bondFlag;
 }hidConnectionInfoStruct;
 
 typedef struct
@@ -78,6 +80,8 @@ void appHidRemoveBond(uint8_t number);
 void appHidTerminalLink(void);
 
 void appHidBroadcastCtl(uint8_t onoff);
+uint8_t getHidConnStatus(void);
+uint8_t appHidGetBondCount(void);
 
 
 

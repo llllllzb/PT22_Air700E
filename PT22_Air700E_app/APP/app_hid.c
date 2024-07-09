@@ -509,11 +509,10 @@ static void appHidHandleConnStatusCB(uint16 connHandle, uint8 changeType)
         {
             GATTServApp_InitCharCfg(connHandle, char1ClientConfig);
             GATTServApp_InitCharCfg(connHandle, hidReportClientCharCfg);
-            sysinfo.bleConnStatus = 0;
             LogPrintf(DEBUG_ALL, "ble link[%d] terminate", connHandle);
+            appHidConn.connectionHandle = INVALID_CONNHANDLE;
         }
     }
-
 }
 
 static gattServiceCBs_t hidServiceCallback = {appHidReadAttrCB, appHidWriteAttrCB, NULL};
@@ -581,38 +580,31 @@ static void appHidPairStateCB(uint16_t connHandle, uint8_t state, uint8_t status
 		    {
 		        LogMessage(DEBUG_ALL, "Pairing Success");
 	            tmos_set_event(appHidTaskId, APP_HID_VERIFY_EVENT);
-	            //sysinfo.bleConnStatus = 1;
+	            
 		    }
 		    else
 		    {
                 LogMessage(DEBUG_ALL, "Pairing Fail");
             }
 			break;
+		//未绑定的
 		case GAPBOND_PAIRING_STATE_BOND_SAVED:
 			LogMessage(DEBUG_ALL, "Pairing Bond Save");
             //读取已绑定的设备
             uint8_t u8Value;
             GAPBondMgr_GetParameter( GAPBOND_BOND_COUNT, &u8Value );
             LogPrintf(DEBUG_ALL, "Bonded device count :%d", u8Value);
-			sysinfo.bleConnStatus = 1;
 			break;
 		//已经绑定配对过的设备会直接进入这个状态，以上的状态忽略
 		case GAPBOND_PAIRING_STATE_BONDED:
 			LogMessage(DEBUG_ALL, "Paring Bonded");
 			tmos_set_event(appHidTaskId, APP_HID_VERIFY_EVENT);
-			sysinfo.bleConnStatus = 1;
 			break;
 		default :
 			LogMessage(DEBUG_ALL, "Unknow Pairing State");
 			break;
-			
 	}
 }
-
-
-
-
-
 
 /*
 *	GapRole状态回调函数
@@ -641,6 +633,12 @@ static void appHidStateNotify(gapRole_States_t newState, gapRoleEvent_t *pEvent)
 			if (pEvent->gap.opcode == GAP_MAKE_DISCOVERABLE_DONE_EVENT)
 			{
 				LogMessage(DEBUG_ALL, "GAPROLE Advertising..");
+			}
+			//广播中出现断连
+			//若蓝牙连接的过程中再次打开广播，这个时候再打开广播的话，出现断连，就会进入到这里
+			else if (pEvent->gap.opcode == GAP_LINK_TERMINATED_EVENT)
+			{
+				LogMessage(DEBUG_ALL, "GAPROLE Advertising Disconn..");
 			}
 			break;
 		case GAPROLE_WAITING:
@@ -673,10 +671,10 @@ static void appHidStateNotify(gapRole_States_t newState, gapRoleEvent_t *pEvent)
                 memcpy(debug, pEvent->linkCmpl.devAddr, 6);
                 byteToHexString(pEvent->linkCmpl.devAddr, debug, 6);
                 debug[12] = 0;
-                LogPrintf(DEBUG_ALL, "connhandle:%d addr:%s, addrtype:%d", appHidConn.connectionHandle, debug, pEvent->linkCmpl.devAddrType);
+                LogPrintf(DEBUG_ALL, "connhandle:%d addr:%s, addrtype:%d", 
+                					appHidConn.connectionHandle, debug, pEvent->linkCmpl.devAddrType);
                 tmos_memcpy(appHidConn.addr, pEvent->linkCmpl.devAddr, 6);
                 appHidConn.addrType = pEvent->linkCmpl.devAddrType;
-				//appHidBroadcastCtl(1, 1);
 			}
 			break;
 		case GAPROLE_CONNECTED_ADV:
@@ -887,7 +885,7 @@ void appHidPeripheralInit(void)
 	GAPBondMgr_SetParameter(GAPBOND_PERI_MITM_PROTECTION, sizeof(uint8_t), &mitm);
 	GAPBondMgr_SetParameter(GAPBOND_PERI_IO_CAPABILITIES, sizeof(uint8_t), &ioCap);
 	GAPBondMgr_SetParameter(GAPBOND_PERI_BONDING_ENABLED, sizeof(uint8_t), &bonding);
-
+	appHidConn.connectionHandle = INVALID_CONNHANDLE;
 
 	//广播配置并使能
 	GAP_SetParamValue(TGAP_DISC_ADV_INT_MIN, 160);
@@ -1039,17 +1037,17 @@ void appHidRemoveBond(uint8_t number)
 
     memcpy(buf + 1, addr, 6);
     buf[0] = appHidConn.addrType;
-    GAPBondMgr_SetParameter(GAPBOND_ENABLE_SINGLEBOND, 6 + 1, buf);
+    GAPBondMgr_SetParameter(GAPBOND_ERASE_SINGLEBOND, 6 + 1, buf);
 }
 
-/*断连*/
+/* 断连 */
 void appHidTerminalLink(void)
 {
     GAPRole_TerminateLink(appHidConn.connectionHandle);
     //sysinfo.bleConnStatus = 0;
 }
 
-//控制蓝牙开启关闭
+/* 控制蓝牙开启关闭 */
 void appHidBroadcastCtl(uint8_t onoff)
 {
 	uint8_t u8Val;
@@ -1062,11 +1060,29 @@ void appHidBroadcastCtl(uint8_t onoff)
 	}
 	else
 	{
+		if (appHidConn.connectionHandle != INVALID_CONNHANDLE)
+		{
+		    GAPRole_TerminateLink(appHidConn.connectionHandle);
+		}
 		u8Val = FALSE;
 		GAPRole_SetParameter(GAPROLE_ADVERT_ENABLED, sizeof(uint8_t), &u8Val);
 	}
 	LogPrintf(DEBUG_ALL, "%s==>%s", __FUNCTION__, onoff ? "enable" : "disable");
 }
 
+/* 获取绑定数量 */
+uint8_t appHidGetBondCount(void)
+{
+    uint8_t u8Value;
+    GAPBondMgr_GetParameter(GAPBOND_BOND_COUNT, &u8Value);
+    LogPrintf(DEBUG_ALL, "Bonded device count :%d", u8Value);
+}
 
+/* 控制蓝牙开启关闭 */
+uint8_t getHidConnStatus(void)
+{
+	if (appHidConn.connectionHandle != INVALID_CONNHANDLE)
+		return 1;
+	return 0;
+}
 

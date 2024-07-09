@@ -15,6 +15,7 @@
 #include "app_jt808.h"
 #include "app_central.h"
 #include "app_hid.h"
+#include "math.h"
 
 #define SYS_LED1_ON       LED1_ON
 #define SYS_LED1_OFF      LED1_OFF
@@ -422,7 +423,66 @@ void gpsUartRead(uint8_t *msg, uint16_t len)
 关闭ZDA:$CFGMSG,0,6,0,1*1C\r\n
 
 复位:$RESET,0,h01*0C
+
+辅助定位:
+查询agnss星历数据有效值:$AIDINFO
+输入辅助定位时间:$AIDTIME
+输入辅助定位位置:$AIDPOS
+
 */
+
+/**************************************************
+@bref		芯与物gps芯片查询星历数据是否有效
+@param
+@return
+@note
+**************************************************/
+void icoeGpsAgnssInfo(void)
+{
+	uint8_t param[20] = { 0 };
+	sprintf(param, "$AIDINFO\r\n");
+	portUartSend(&usart1_ctl, (uint8_t *)param, strlen(param));
+	LogMessage(DEBUG_ALL, "icoeGpsAgnssInfo==>ok");
+}
+
+/**************************************************
+@bref		芯与物gps芯片输入辅助时间
+@param
+@return
+@note
+**************************************************/
+void icoeGpsInjectAidTime(uint16_t year, uint8_t month, uint8_t date, uint8_t hour, uint8_t minute, uint8_t second)
+{
+	uint8_t param[100] = { 0 };
+	uint8_t crc;
+	sprintf(param, "$AIDTIME,%d,%d,%d,%d,%d,%d,200", year, month, date, hour, minute, second);
+	crc = param[1];
+	XOR_CRC_TOTAL(param + 2, strlen(param + 2), crc);
+	sprintf(param + strlen(param), "*%x\r\n", crc);
+	portUartSend(&usart1_ctl, (uint8_t *)param, strlen(param));
+	LogPrintf(DEBUG_ALL, "icoeGpsInjectAidTime==>%s", param);
+}
+
+/**************************************************
+@bref		芯与物gps芯片输入辅助位置
+@param
+@return
+@note
+**************************************************/
+void icoeGpsInjectLatLon(gpsinfo_s *gpsinfo)
+{
+	uint8_t param[100] = { 0 };
+	uint8_t crc;
+	sprintf(param, "$AIDPOS,%lf,%c,%lf,%c,%f",
+	        fabsf(dynamicParam.saveLat), dynamicParam.saveLat > 0.0 ? 'N' : 'S', fabsf(dynamicParam.saveLon), dynamicParam.saveLon > 0.0 ? 'E' : 'W', dynamicParam.savealt);
+	crc = param[1];
+	XOR_CRC_TOTAL(param + 2, strlen(param + 2), crc);
+	sprintf(param + strlen(param), "*%x\r\n", crc);
+	portUartSend(&usart1_ctl, (uint8_t *)param, strlen(param));
+	LogPrintf(DEBUG_ALL, "icoeGpsInjectLatLon==>%s", param);
+
+}
+
 
 /**************************************************
 @bref		芯与物gps芯片复位
@@ -448,7 +508,7 @@ static void icoeGpsCfg(void)
 {
 	uint8_t param[128] = { 0 };
 	//关闭GSV 关闭GLL 关闭ZDA
-	sprintf(param, "$CFGMSG,0,3,0,1*19\r\n$CFGMSG,0,1,0,1*1B\r\n$CFGMSG,0,6,1,1*1D\r\n");
+	sprintf(param, "$CFGMSG,0,1,0,1*1B\r\n$CFGMSG,0,6,1,1*1D\r\n");
 	portUartSend(&usart1_ctl, (uint8_t *)param, strlen(param));
 	LogMessage(DEBUG_ALL, "icoeGpsCfg==>ok");
 }
@@ -485,17 +545,19 @@ void gpsOpen(void)
 
 static void gpsWait(void)
 {
-    static uint8_t runTick = 0;
-    if (++runTick >= 4)
-    {
-        runTick = 0;
-        gpsChangeFsmState(GPSOPENSTATUS);
-        if (sysinfo.ephemerisFlag == 0 || sysinfo.agpsTick == 0 || sysinfo.sysTick >= sysinfo.agpsTick)
-        {
-          	agpsRequestSet();
-          	sysinfo.agpsTick = sysinfo.sysTick + 120;
-        }
-    }
+//    static uint8_t runTick = 0;
+//    if (++runTick >= 4)
+//    {
+//        runTick = 0;
+//        gpsChangeFsmState(GPSOPENSTATUS);
+//        if (sysinfo.ephemerisFlag == 0 || sysinfo.agpsTick == 0 || sysinfo.sysTick >= sysinfo.agpsTick)
+//        {
+//          	agpsRequestSet();
+//          	sysinfo.agpsTick = sysinfo.sysTick + 120;
+//        }
+//    }
+	agpsRequestSet();
+	gpsChangeFsmState(GPSOPENSTATUS);
 }
 
 /**************************************************
@@ -532,12 +594,12 @@ void gpsClose(void)
 void saveGpsHistory(void)
 {
 	gpsinfo_s *gpsinfo;
-    int16_t latitude, longtitude;
+    double latitude, longtitude;
     gpsinfo = getLastFixedGPSInfo();
     if (gpsinfo->fixstatus != 0)
     {
-        latitude   = (int16_t)gpsinfo->latitude;
-        longtitude = (int16_t)gpsinfo->longtitude;
+        latitude   = gpsinfo->src_lat;
+        longtitude = gpsinfo->src_lon;
         if (gpsinfo->NS == 'S')
         {
             if (latitude > 0)
@@ -552,9 +614,11 @@ void saveGpsHistory(void)
                 longtitude *= -1;
             }
         }
-        dynamicParam.saveLat = (int32_t)latitude;
-        dynamicParam.saveLon = (int32_t)longtitude;
-        LogPrintf(DEBUG_ALL, "Save Latitude:%d,Longtitude:%d", dynamicParam.saveLat, dynamicParam.saveLon);
+        dynamicParam.saveLat = latitude;
+        dynamicParam.saveLon = longtitude;
+        dynamicParam.savealt = gpsinfo->src_alt;
+        LogPrintf(DEBUG_ALL, "Save Latitude:%lf,Longtitude:%lf altitude:%f", 
+        		dynamicParam.saveLat, dynamicParam.saveLon, dynamicParam.savealt);
 		dynamicParamSaveAll();
     }
 }
@@ -2629,7 +2693,7 @@ uint8_t isKeyPressInProgress(void)
 #define KEY_OFF		0
 #define KEY_RESULT_PRESS	1
 #define KEY_RESULT_CLICK	2
-#define KEY_LONG_PRESS_TIME		10
+#define KEY_LONG_PRESS_TIME		1
 void keyScan(void)
 {
 	/* 判断长按按键 */
@@ -2728,6 +2792,7 @@ void keyScan(void)
 			appHidBroadcastCtl(0);
 			//如果关机前需要做特定的操作就使用systemShutDownCB,不需要特定操作直接切换到modedone/modestop就好了
 			systemShutDownCB();
+			sysparam.pwrOnoff = 0;
 			paramSaveAll();
 		}
 		else if (sysparam.pwrOnoff == 0 && sysinfo.pwrDone == 0)
@@ -2887,6 +2952,28 @@ static void mode123UploadTask(void)
 	}
 }
 
+void bleConnCheckTask(void)
+{
+	static uint8_t con_tick = 0;
+	static uint8_t discon_tick = 0;
+	
+	if (getHidConnStatus() == 0)
+	{
+		con_tick = 0;
+		if (discon_tick < 200)
+			discon_tick++;
+		if (discon_tick >= 10)
+			sysinfo.bleConnStatus = 0;
+		return;
+	}
+	discon_tick = 0;
+	con_tick++;
+	if (con_tick >= 5)
+	{
+		sysinfo.bleConnStatus = 1;
+	}
+}
+
 /**************************************************
 @bref		1秒任务
 @param
@@ -2899,6 +2986,7 @@ void taskRunInSecond(void)
     rebootEveryDay();
     gpsRequestTask();	//gps状态设置/清除
     motionCheckTask();	//gsensor状态设置/清除
+    bleConnCheckTask();
 	if (sysparam.pwrOnoff)
 	{
 	    netConnectTask();
@@ -3086,7 +3174,6 @@ static tmosEvents myTaskEventProcess(tmosTaskID taskID, tmosEvents events)
 
 	if (events & APP_TASK_SYSTEM_SHUTDOWN_EVENT)
 	{
-		sysparam.pwrOnoff = 0;
 		LogPrintf(DEBUG_ALL, "System power off done");
 		
 		if (sysinfo.runFsm <= MODE_RUNING)
@@ -3109,7 +3196,6 @@ static tmosEvents myTaskEventProcess(tmosTaskID taskID, tmosEvents events)
 			sysinfo.logLevel = 0;
 		sysinfo.nmeaOutPutCtl = 0;
 		sysinfo.mode4First = 0;
-		paramSaveAll();
 		return events ^ APP_TASK_SYSTEM_SHUTDOWN_EVENT;
 	}
 	

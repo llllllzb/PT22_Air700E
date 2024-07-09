@@ -1,6 +1,6 @@
 #include <app_protocol.h>
 #include "app_net.h"
-
+#include "app_hid.h"
 #include "app_db.h"
 #include "app_gps.h"
 #include "app_instructioncmd.h"
@@ -40,6 +40,7 @@ const atCmd_s cmdtable[] =
     {QSCLK_CMD, "AT+QSCLK"},
     {CFUN_CMD, "AT+CFUN"},
 	{ATA_CMD, "ATA"},
+	{COPS_CMD, "AT+COPS"},
 	{CBC_CMD, "AT+CBC"},
 	{CIPMUX_CMD, "AT+CIPMUX"},
 	{CIPSTART_CMD, "AT+CIPSTART"},
@@ -172,7 +173,7 @@ void outputNode(void)
             sysinfo.lockTick = 0;
             LogMessage(DEBUG_ALL, "outputNode==>Unlock");
         }
-        return ;
+        return;
     }
     if (headNode == NULL)
     {
@@ -187,7 +188,8 @@ void outputNode(void)
         		如果置高的话模组会一直有1.5V左右的电,这样会导致模组可能会关不了机,也开不了机,需要整机断电才行;
         		另外模组关机的时候最好不要阻止这里发完AT指令,不然会一直占着堆空间
         	*/
-        	if (moduleState.powerState == 0)	//关机或者正在开关机 DTR都拉低
+        	//关机或者正在开关机 DTR都拉低
+        	if (moduleState.powerState == 0)
         	{
             	WAKEMODULE;
             }
@@ -871,9 +873,9 @@ void netConnectTask(void)
                 moduleState.ceregOK = 0;
                 moduleCtrl.csqCount = 0;
                 sendModuleCmd(CGREG_CMD, "2");
-                sendModuleCmd(CPMS_CMD, "\"ME\",\"ME\",\"ME\"");	/*修改短信存储位置*/
-	        	sendModuleCmd(CNMI_CMD, "2,2");						/*第二个参数表示缓存在ME中, 不立即上报*/
-	        	sendModuleCmd(CMGF_CMD, "1");						/*TEXT模式*/
+//                sendModuleCmd(CPMS_CMD, "\"ME\",\"ME\",\"ME\"");	/*修改短信存储位置*/
+//	        	sendModuleCmd(CNMI_CMD, "2,2");						/*第二个参数表示缓存在ME中, 不立即上报*/
+//	        	sendModuleCmd(CMGF_CMD, "1");						/*TEXT模式*/
                 changeProcess(CGREG_STATUS);
                 netResetCsqSearch();
             }
@@ -954,6 +956,7 @@ void netConnectTask(void)
             sendModuleCmd(CFG_CMD, "\"urcdelay\",100");
             sendModuleCmd(CIMI_CMD, NULL);
             sendModuleCmd(CGSN_CMD, "1");
+            sendModuleCmd(COPS_CMD, "?");
             sendModuleCmd(ICCID_CMD, NULL);
             queryBatVoltage();
             //netSetCstt((char *)sysparam.apn, (char *)sysparam.apnuser, (char *)sysparam.apnpassword);
@@ -1067,6 +1070,9 @@ static void cgregParser(uint8_t *buf, uint16_t len)
     char restore[50];
     uint8_t cnt;
     uint8_t type = 0;
+    uint8_t ret;
+    uint16_t lac;
+    uint32_t cid;
     index = my_getstrindex((char *)buf, "+CGREG:", len);
     if (index < 0)
     {
@@ -1092,7 +1098,8 @@ static void cgregParser(uint8_t *buf, uint16_t len)
                     switch (cnt)
                     {
                         case 2:
-                            if (restore[0] == '1' || restore[0] == '5')
+                        	ret = atoi(restore);
+                            if (1 == ret || 5 == ret)
                             {
                                 if (type)
                                 {
@@ -1109,12 +1116,26 @@ static void cgregParser(uint8_t *buf, uint16_t len)
                             }
                             break;
                         case 3:
-                            moduleState.lac = strtoul(restore + 1, NULL, 16);
-                            LogPrintf(DEBUG_ALL, "LAC=%s,0x%X", restore, moduleState.lac);
+                            lac = strtoul(restore + 1, NULL, 16);
+//                           	LogPrintf(DEBUG_ALL, "current lac:0x%x", lac);
+//                            LogPrintf(DEBUG_ALL, "LAC=%s,0x%X", restore, moduleState.lac);
                             break;
                         case 4:
-                            moduleState.cid = strtoul(restore + 1, NULL, 16);
-                            LogPrintf(DEBUG_ALL, "CID=%s,0x%X", restore, moduleState.cid);
+                            cid = strtoul(restore + 1, NULL, 16);
+                            LogPrintf(DEBUG_ALL, "current lac:0x%x cid:0x%x  last lac:0x%x cid:0x%x ", 
+                            		lac, cid, moduleState.lac, moduleState.cid);
+                            // mode,2,0,0 要实时检测基站信息的变化
+                            if (0 == sysparam.gpsuploadgap && 0 == sysparam.gapMinutes &&
+                            	((moduleState.lac != lac && 0 != moduleState.lac) ||
+                            	 (moduleState.cid != cid && 0 != moduleState.cid)))
+                            {
+								LogPrintf(DEBUG_ALL, "LBS different, lbs wifireq");
+								lbsRequestSet(DEV_EXTEND_OF_MY);
+								wifiRequestSet(DEV_EXTEND_OF_MY);
+                            }
+                           	moduleState.lac = lac;
+                           	moduleState.cid = cid;
+                            LogPrintf(DEBUG_ALL, "LAC=0x%X CID=0x%X",  moduleState.lac, moduleState.cid);
                             break;
                     }
                     restore[0] = 0;
@@ -1130,10 +1151,6 @@ static void cgregParser(uint8_t *buf, uint16_t len)
                 }
             }
         }
-        if (type == 0)
-        {
-			sendModuleCmd(CGREG_CMD, "0");
-		}
     }
 }
 
@@ -1169,12 +1186,38 @@ static void cimiParser(uint8_t *buf, uint16_t len)
             moduleState.IMSI[i] = rebuf[i];
         }
         moduleState.IMSI[index] = 0;
-        moduleState.mcc = (moduleState.IMSI[0] - '0') * 100 + (moduleState.IMSI[1] - '0') * 10 + moduleState.IMSI[2] - '0';
-        moduleState.mnc = (moduleState.IMSI[3] - '0') * 10 + moduleState.IMSI[4] - '0';
-        LogPrintf(DEBUG_ALL, "IMSI:%s,MCC=%d,MNC=%02d", moduleState.IMSI, moduleState.mcc, moduleState.mnc);
+        LogPrintf(DEBUG_ALL, "IMSI:%s", moduleState.IMSI);
     }
 }
 
+/**************************************************
+@bref		AT+COPS	指令解析
+@param
+@return
+@note
++COPS: 0,2,"46000",7
+**************************************************/
+
+static void copsParser(uint8_t *buf, uint16_t len)
+{
+    int16_t index;
+    uint8_t *rebuf;
+    uint16_t  relen;
+	ITEM item;
+	rebuf = buf;
+    relen = len;
+	index = my_getstrindex((char *)rebuf, "+COPS:", relen);
+	if (index >= 0)
+	{
+		rebuf += index + 7;
+		relen -= index + 7;
+		
+		stringToItem(&item, rebuf, relen);
+		moduleState.mcc = ((item.item_data[2][1] - '0') * 100) + ((item.item_data[2][2] - '0') * 10) + (item.item_data[2][3] - '0');
+		moduleState.mnc = ((item.item_data[2][4] - '0') * 10) + (item.item_data[2][5] - '0');
+		LogPrintf(DEBUG_ALL, "MCC:%03d MNC:%02d", moduleState.mcc, moduleState.mnc);
+	}
+}
 
 /**************************************************
 @bref		AT+ICCID	指令解析
@@ -1512,6 +1555,7 @@ static void cgsnParser(uint8_t *buf, uint16_t len)
             jt808CreateSn(dynamicParam.jt808sn, dynamicParam.SN + 3, 12);
             dynamicParam.jt808isRegister = 0;
             dynamicParam.jt808AuthLen = 0;
+            appHidDeviveNameCfg();
             dynamicParamSaveAll();
         }
     }
@@ -2041,7 +2085,9 @@ void moduleRecvParser(uint8_t *buf, uint16_t bufsize)
     cmgrParser(dataRestore, len);
     cipstartRspParser(dataRestore, len);
     wifiscanParser(dataRestore, len);
+    copsParser(dataRestore, len);
     cipackParser(dataRestore, len);		//点进去函数注释有说明为什么cipack解析函数放在这里
+    cgregParser(dataRestore, len);		//放在这里接收模组的主动上报基站信息
     if (ciprxgetParser(dataRestore, len))
     {
         if (moduleState.cmd == CIPRXGET_CMD)
@@ -2067,10 +2113,6 @@ void moduleRecvParser(uint8_t *buf, uint16_t bufsize)
             break;
         case CSQ_CMD:
             csqParser(dataRestore, len);
-            break;
-        case CGREG_CMD:
-        case CEREG_CMD:
-            cgregParser(dataRestore, len);
             break;
         case CIMI_CMD:
             cimiParser(dataRestore, len);
@@ -2209,8 +2251,6 @@ void moduleGetCsq(void)
 
 void moduleGetLbs(void)
 {
-    sendModuleCmd(CEREG_CMD, "2");
-    sendModuleCmd(CGREG_CMD, "2");
     sendModuleCmd(CGREG_CMD, "?");
     sendModuleCmd(CEREG_CMD, "?");
 }
@@ -2253,7 +2293,7 @@ void sendMessage(uint8_t *buf, uint16_t len, char *telnum)
 **************************************************/
 void deleteAllMessage(void)
 {
-    sendModuleCmd(CMGD_CMD, "0,4");
+    //sendModuleCmd(CMGD_CMD, "0,4");
 }
 
 /**************************************************

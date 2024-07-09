@@ -908,7 +908,8 @@ void createProtocolA0(char *DestBuf, uint16_t *len)
     DestBuf[pdu_len++] = getCid();
     lat = (int16_t)dynamicParam.saveLat;
     lon = (int16_t)dynamicParam.saveLon;
-    LogPrintf(DEBUG_ALL, "Lat %d  Lon %d", dynamicParam.saveLat, dynamicParam.saveLon);
+    LogPrintf(DEBUG_ALL, "Mcc:%d, Mnc:%02d Lac:0x%x Cid:0x%x Lat %d  Lon %d", getMCC(), getMNC(), getLac(), getCid(),
+    				dynamicParam.saveLat, dynamicParam.saveLon);
     if (dynamicParam.saveLat < 0)
     {
         DestBuf[pdu_len] |= 0x80;

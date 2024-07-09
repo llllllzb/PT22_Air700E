@@ -638,9 +638,10 @@ void portGpioWakeupIRQHandler(void)
 			{
 				wakeUpByInt(2, 3);
 				tmos_set_event(sysinfo.taskId, APP_TASK_RUN_EVENT);
-				LogPrintf(DEBUG_ALL, "sos key..");
+				
 			}
 		}
+		LogPrintf(DEBUG_ALL, "sos key..");
 	}
 }
 
@@ -662,6 +663,7 @@ void portModuleGpioCfg(uint8_t state)
         PORT_PWRKEY_H;
         PORT_RSTKEY_H;
         PORT_SUPPLY_OFF;
+        DTR_LOW;
     }
     else
     {
