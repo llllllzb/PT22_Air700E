@@ -1690,7 +1690,8 @@ void bleTryInit(void)
 
 static void modeStart(void)
 {
-	if (sysparam.pwrOnoff == 0)
+	if (sysparam.pwrOnoff == 0 ||
+		sysinfo.bleConnStatus == 1)
 	{
 		LogPrintf(DEBUG_ALL, "System power key was off");
 		modeTryToDone();
@@ -1706,6 +1707,7 @@ static void modeStart(void)
     delMsgReqSet();
     portFsclkChange(0);
     portLdrGpioCfg(1);
+    portSosKeyCfg(1);
     if (sysinfo.mode4First == 0)
     {
 		sysinfo.mode4First = 1;
@@ -1854,7 +1856,6 @@ static void modeStop(void)
     {
         portGsensorCtl(0);
     }
-    ledStatusUpdate(SYSTEM_LED_RUN, 0);
     modulePowerOff();
     changeModeFsm(MODE_DONE);
 }
@@ -1874,7 +1875,7 @@ static void modeDone(void)
 	sysinfo.canRunFlag = 0;
 	static uint8_t tick = 0;
 	//保证关机时不会有gps请求
-	if (sysparam.pwrOnoff == 0)
+	if (sysparam.pwrOnoff == 0 || sysinfo.bleConnStatus == 1)
 	{
 		sysinfo.gpsRequest = 0;
 	}
@@ -1900,22 +1901,35 @@ static void modeDone(void)
     else if (sysparam.MODE == MODE1 || sysparam.MODE == MODE3 || sysparam.MODE == MODE4)
     {
     	motionTick = 0;
-        if (sysinfo.sleep && getModulePwrState() == 0 && isKeyPressInProgress() == 0)
-        {
-            tmos_set_event(sysinfo.taskId, APP_TASK_STOP_EVENT);
-        }
-    }
-    else if (sysparam.MODE == MODE23 || sysparam.MODE == MODE21 || sysparam.MODE == MODE2)
-    {
-		/*检测gsensor是否有中断进来*/
-		//LogPrintf(DEBUG_ALL, "motioncnt:%d, motionTick:%d ", motionCheckOut(sysparam.gsdettime), motionTick);
-		if (motionCheckOut(sysparam.gsdettime) <= 0)
+        //关机或者蓝牙断开导致的休眠
+		//要判断mcu休眠且模组关闭完成
+		if (isKeyPressInProgress() == 0)
 		{
-			if (sysinfo.sleep && getModulePwrState() == 0 && isKeyPressInProgress() == 0)
+			if (sysinfo.sleep && getModulePwrState() == 0 && sysinfo.kernalRun)
 			{
 				tmos_set_event(sysinfo.taskId, APP_TASK_STOP_EVENT);
 				motionTick = 0;
 			}
+		}
+    }
+    else if (sysparam.MODE == MODE23 || sysparam.MODE == MODE21 || sysparam.MODE == MODE2)
+    {
+//		LogPrintf(DEBUG_ALL, "motioncnt:%d, motionTick:%d key:%d hid:%d 4Gmodule:%d", 
+//							motionCheckOut(sysparam.gsdettime), motionTick,
+//							isKeyPressInProgress(), getHidConnStatus(), getModulePwrState());
+		//关机或者蓝牙断开导致的休眠
+		//要判断mcu休眠且模组关闭完成
+		if (isKeyPressInProgress() == 0 && 
+			sysinfo.sleep && 
+			getModulePwrState() == 0 && 
+			motionCheckOut(sysparam.gsdettime) <= 0 &&
+			sysinfo.kernalRun)
+		{
+					LogPrintf(DEBUG_ALL, "motioncnt:%d, motionTick:%d key:%d hid:%d 4Gmodule:%d", 
+							motionCheckOut(sysparam.gsdettime), motionTick,
+							isKeyPressInProgress(), getHidConnStatus(), getModulePwrState());
+			tmos_set_event(sysinfo.taskId, APP_TASK_STOP_EVENT);
+			motionTick = 0;
 		}
     }
 }
@@ -1965,11 +1979,13 @@ static void sysAutoReq(void)
     uint16_t year;
     uint8_t month, date, hour, minute, second;
     static uint16_t noNetTick = 0;
-    if (sysparam.pwrOnoff == 0)
+    if (sysparam.pwrOnoff == 0 || 
+    	sysinfo.bleConnStatus == 1)
     {
 		sysinfo.mode4NoNetTick = 0;
 		sysinfo.sysMinutes = 0;
-		LogPrintf(DEBUG_ALL, "sysAutoReq==>system power off");
+		LogPrintf(DEBUG_ALL, "sysAutoReq==>system power %s, ble conn status:%s", 
+								sysparam.pwrOnoff ? "on" : "off", sysinfo.bleConnStatus ? "Yes" : "No");
 		return;
     }
 
@@ -2144,12 +2160,11 @@ uint8_t SysBatDetection(void)
 	{
 		if (sysparam.MODE == MODE2 || sysparam.MODE == MODE21 || sysparam.MODE == MODE23)
 		{
-			if (sysinfo.gsensorOnoff == 0 && sysparam.pwrOnoff)
+			if (sysinfo.gsensorOnoff == 0 && sysparam.pwrOnoff && sysinfo.bleConnStatus == 0)
 			{
 				portGsensorCtl(1);
 			}
 		}
-		
 	}
 	return 1;
 }
@@ -2693,7 +2708,7 @@ uint8_t isKeyPressInProgress(void)
 #define KEY_OFF		0
 #define KEY_RESULT_PRESS	1
 #define KEY_RESULT_CLICK	2
-#define KEY_LONG_PRESS_TIME		1
+#define KEY_LONG_PRESS_TIME		20
 void keyScan(void)
 {
 	/* 判断长按按键 */
@@ -2703,7 +2718,7 @@ void keyScan(void)
     static int8_t clicktime;		//点击之间的间隔
     static uint8_t clickcnt = 1;	//点击次数
     /* 防止按着不松手 */
-	static uint8_t once = 0;		//0：检测到松开过按键	1:已经判断为一种按键方式了 如果不松开继续按下去是不会判断新的按键方式的  用于防止一直按着键不放
+	static uint8_t once = 0;		//0:检测到松开过按键	1:已经判断为一种按键方式了 如果不松开继续按下去是不会判断新的按键方式的  用于防止一直按着键不放
 	/* 按键类型判断结果 */
 	uint8_t result = 0;
     if (PWR_KEY_READ == KEY_ON)//发现按键被按下或者被按下过
@@ -2737,6 +2752,10 @@ void keyScan(void)
             once = 1;
             clickcnt = 0;
             LogMessage(DEBUG_ALL, "Key Triclick");
+            uint8_t Count = appHidGetBondCount();
+			uint8_t ret;
+			ret = appHidRemoveAllBond();
+			LogPrintf(DEBUG_ALL, "Number of existing bond is %d,eraser them %s", Count, ret ? "Fail" : "Success");
         }
         //连按n次之间的间隔
         if (cnt >= 10)
@@ -2786,8 +2805,11 @@ void keyScan(void)
 		    sysinfo.lbsExtendEvt = 0;
 		    portLdrGpioCfg(0);
 			portGsensorCtl(0);
+			portSosKeyCfg(0);
 			ledStatusUpdate(SYSTEM_LED_RUN, 0);
 			sysinfo.pwrDone = 1;
+			//清除蓝牙工作标志
+			sysinfo.bleConnStatus = 0;
 			//关闭蓝牙
 			appHidBroadcastCtl(0);
 			//如果关机前需要做特定的操作就使用systemShutDownCB,不需要特定操作直接切换到modedone/modestop就好了
@@ -2834,16 +2856,25 @@ void keySosScan(void)
     static uint8_t once = 0;//0：检测到松开过按键  1:已经判断为一种按键方式了 如果不松开继续按下去是不会判断新的按键方式的  用于防止一直按着键不放
     static int8_t clicktime ;//点击之间的间隔
     static uint8_t clickcnt = 1;//点击次数
-
-    if (SOS_KEY_READ == KEY_ON)//发现按键被按下或者被按下过
+	if (sysparam.pwrOnoff == 0)
+	{
+		return;
+	}
+	if (sysinfo.soskeyOnoff == 0)
+	{
+		cnt = 0;
+		return;
+	}
+    if (SOS_KEY_READ == 0)//发现按键被按下或者被按下过
     {
         cnt++;
         //判断为长按
-        if (cnt >= 50 && once == 0)
+        if (cnt >= 30 && once == 0)
         {
             sysinfo.doSosFlag = 1;
             once = 1;
             LogMessage(DEBUG_ALL, "SOS Key press");
+            alarmRequestSet(ALARM_SOS_REQUEST);
         }
 
         if (laststatus && once == 0)
@@ -2932,7 +2963,7 @@ static void mode123UploadTask(void)
 	gpsinfo = getCurrentGPSInfo();
 	if (gpsinfo->fixstatus == 0)
 	{
-		//不定位 ，取消这次sports指令
+		//不定位，取消这次sports指令
 		if (nofixTick >= sysinfo.mode123Min * 60)
 		{
 			sysinfo.mode123RunTick = sysinfo.mode123Min * 60;
@@ -2954,26 +2985,83 @@ static void mode123UploadTask(void)
 
 void bleConnCheckTask(void)
 {
-	static uint8_t con_tick = 0;
-	static uint8_t discon_tick = 0;
 	
 	if (getHidConnStatus() == 0)
 	{
-		con_tick = 0;
-		if (discon_tick < 200)
-			discon_tick++;
-		if (discon_tick >= 10)
-			sysinfo.bleConnStatus = 0;
+		sysinfo.con_tick = 0;
+		if (sysinfo.discon_tick < 200)
+			sysinfo.discon_tick++;
+		if (sysinfo.discon_tick >= 10)
+		{
+			if (sysinfo.bleConnStatus)
+			{
+				gpsRequestSet(GPS_REQUEST_UPLOAD_ONE);
+				sysinfo.ledTick = 180;
+				sysinfo.bleConnStatus = 0;
+				
+				LogPrintf(DEBUG_ALL, "Ble lost!!!!!!!!!");
+			}
+		}
 		return;
 	}
-	discon_tick = 0;
-	con_tick++;
-	if (con_tick >= 5)
+
+//	if (getHidConnStatus() == 0)
+//		return;
+	sysinfo.discon_tick = 0;
+	if (sysinfo.con_tick < 200)
+		sysinfo.con_tick++;
+	if (sysinfo.con_tick >= 3)
 	{
-		sysinfo.bleConnStatus = 1;
+		if (sysinfo.bleConnStatus == 0)
+		{
+			sysinfo.bleConnStatus = 1;
+			LogPrintf(DEBUG_ALL, "Ble connected!!!!!!!!!!");
+			sysinfo.gpsRequest = 0;
+		    sysinfo.alarmRequest = 0;
+		    sysinfo.wifiRequest = 0;
+		    sysinfo.lbsRequest = 0;
+		    sysinfo.wifiExtendEvt = 0;
+		    sysinfo.lbsExtendEvt = 0;
+		    portLdrGpioCfg(0);
+			portGsensorCtl(0);
+			
+			if (sysinfo.runFsm <= MODE_RUNING)
+			{
+				modeTryToStop();
+			}
+			else
+			{
+				modeTryToDone();
+			}
+			//关机的时候清空一些必要的参数
+			sysinfo.mode123RunTick = 0;
+			sysinfo.mode123Min = 0;
+			sysinfo.mode123GpsFre = 0;
+		}
 	}
 }
 
+void bleDisConnCheckTask(void)
+{
+	if (getHidConnStatus() == 0)
+	{
+		sysinfo.con_tick = 0;
+		if (sysinfo.discon_tick < 200)
+			sysinfo.discon_tick++;
+		if (sysinfo.discon_tick >= 3)
+		{
+			if (sysinfo.bleConnStatus)
+			{
+				gpsRequestSet(GPS_REQUEST_UPLOAD_ONE);
+				sysinfo.ledTick = 180;
+				sysinfo.bleConnStatus = 0;
+				
+				LogPrintf(DEBUG_ALL, "Ble lost!!!!!!!!!");
+			}
+		}
+		return;
+	}
+}
 /**************************************************
 @bref		1秒任务
 @param
@@ -2987,7 +3075,7 @@ void taskRunInSecond(void)
     gpsRequestTask();	//gps状态设置/清除
     motionCheckTask();	//gsensor状态设置/清除
     bleConnCheckTask();
-	if (sysparam.pwrOnoff)
+	if (sysparam.pwrOnoff && sysinfo.bleConnStatus == 0)
 	{
 	    netConnectTask();
 	    gsCheckTask();
@@ -3111,19 +3199,18 @@ void myTaskPreInit(void)
 	portLdrGpioCfg(0);
     portWdtCfg();
     portPwrKeyCfg();
-    portSosKeyCfg();
+    portGsensorCtl(0);
     bleTryInit();
     socketListInit();
-    
 	sysinfo.ledTick = 180;//开机灯工作3分钟
-	
     createSystemTask(ledTask, 1);
     createSystemTask(outputNode, 2);
 	createSystemTask(keyScan, 1);
+	createSystemTask(keySosScan, 1);
     sysinfo.sysTaskId = createSystemTask(taskRunInSecond, 10);
 
     LogMessage(DEBUG_ALL, ">>>>>>>>>>>>>>>>>>>>>");
-    LogPrintf(DEBUG_ALL, "SYS_GetLastResetSta:%x", SYS_GetLastResetSta());
+    LogPrintf(DEBUG_ALL,  "SYS_GetLastResetSta:%x", SYS_GetLastResetSta());
 	if (sysparam.pwrOnoff)
 	{
 		volCheckRequestSet();
@@ -3206,7 +3293,7 @@ static tmosEvents myTaskEventProcess(tmosTaskID taskID, tmosEvents events)
         /*重新配置IO*/
 		portModuleGpioCfg(1);
 		portGpsGpioCfg(1);
-		portLedGpioCfg(1);
+		//portLedGpioCfg(1);
 		portAdcCfg(1);
 		portWdtCfg();
         tmos_start_reload_task(sysinfo.taskId, APP_TASK_KERNAL_EVENT, MS1_TO_SYSTEM_TIME(100));
@@ -3222,13 +3309,14 @@ static tmosEvents myTaskEventProcess(tmosTaskID taskID, tmosEvents events)
 		portAdcCfg(0);
 		portModuleGpioCfg(0);
 		portGpsGpioCfg(0);
-		portLedGpioCfg(0);
+		//portLedGpioCfg(0);
 		if (sysinfo.pwrDone)
 		{
 			sysinfo.pwrDone = 0;
 		}
 		portWdtCancel();
-       	tmos_stop_task(sysinfo.taskId, APP_TASK_KERNAL_EVENT);
+		if (sysparam.pwrOnoff == 0)
+       		tmos_stop_task(sysinfo.taskId, APP_TASK_KERNAL_EVENT);
         return events ^ APP_TASK_STOP_EVENT;
     }
     
@@ -3249,6 +3337,12 @@ static tmosEvents myTaskEventProcess(tmosTaskID taskID, tmosEvents events)
         return events ^ APP_TASK_ONEMINUTE_EVENT;
     }
 
+	if (events & APP_TASK_SYS_RESET_EVENT)
+	{
+		portSysReset();
+		return events ^ APP_TASK_SYS_RESET_EVENT;
+	}
+
     return 0;
 }
 
@@ -3265,6 +3359,5 @@ void myTaskInit(void)
     tmos_set_event(sysinfo.taskId, APP_TASK_RUN_EVENT);
     tmos_start_reload_task(sysinfo.taskId, APP_TASK_POLLUART_EVENT, MS1_TO_SYSTEM_TIME(50));
     tmos_start_reload_task(sysinfo.taskId, APP_TASK_ONEMINUTE_EVENT, MS1_TO_SYSTEM_TIME(60000));
-
 }
 

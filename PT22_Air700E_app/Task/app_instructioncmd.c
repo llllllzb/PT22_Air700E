@@ -57,6 +57,7 @@ const instruction_s insCmdTable[] =
     {MOTIONDET_INS, "MOTIONDET"},
     {CLEARSTEP_INS, "CLEARSTEP"},
     {DELETEMSG_INS, "DELETEMSG"},
+    {CLEARBOND_INS, "CLEARBOND"},
 };
 
 static insMode_e mode123;
@@ -713,7 +714,7 @@ void doUPSInstruction(ITEM *item, char *message)
     strcpy(bootparam.codeVersion, EEPROM_VERSION);
     bootParamSaveAll();
     startTimer(30, modulePowerOff, 0);
-    startTimer(130, portSysReset, 0);
+    tmos_start_task(sysinfo.taskId, APP_TASK_SYS_RESET_EVENT, MS1_TO_SYSTEM_TIME(13000));
 }
 
 void doLOWWInstruction(ITEM *item, char *message)
@@ -801,7 +802,7 @@ void doResetInstruction(ITEM *item, char *message)
 {
     sprintf(message, "System will reset after 10 seconds");
 	startTimer(30, modulePowerOff, 0);
-    startTimer(100, portSysReset, 0);
+	tmos_start_task(sysinfo.taskId, APP_TASK_SYS_RESET_EVENT, MS1_TO_SYSTEM_TIME(10000));
 }
 
 void doUTCInstruction(ITEM *item, char *message)
@@ -841,7 +842,7 @@ void doDebugInstrucion(ITEM *item, char *message)
     sprintf(message + strlen(message), "hideLogin:%s;", hiddenServerIsReady() ? "Yes" : "No");
 	sprintf(message + strlen(message), "runFsm:%d wifiExtendEvt:0x%02x alarmreq:0x%02x;", 
 										sysinfo.runFsm, sysinfo.wifiExtendEvt, sysinfo.alarmRequest);
-	sprintf(message + strlen(message), "pwronoff:%d bleconn:%d bondcnt:%d", 
+	sprintf(message + strlen(message), "pwronoff:%d bleconn:%d bondcnt:%d;", 
 										sysparam.pwrOnoff, sysinfo.bleConnStatus, appHidGetBondCount());
 	sprintf(message + strlen(message), "PWR_KEY_READ:%d SOS_KEY_READ:%d", PWR_KEY_READ, SOS_KEY_READ);
 }
@@ -871,7 +872,6 @@ void doACCCTLGNSSInstrucion(ITEM *item, char *message)
                 "The GPS will always be on");
         paramSaveAll();
     }
-
 }
 
 
@@ -1557,6 +1557,12 @@ static void doDeleteMsgInstruction(ITEM *item, char *message)
 	strcpy(message, "Delete message");
 }
 
+static void doClearBondInstruction(ITEM *item, char *message)
+{
+	uint8_t Count = appHidGetBondCount();
+	uint8_t ret = appHidRemoveAllBond();
+	sprintf(message, "Number of existing bond is %d,eraser them %s", Count, ret ? "Fail" : "Success");
+}
 
 
 /*--------------------------------------------------------------------------------------*/
@@ -1697,6 +1703,9 @@ static void doinstruction(int16_t cmdid, ITEM *item, insMode_e mode, void *param
 			break;
         case DELETEMSG_INS:
 			doDeleteMsgInstruction(item, message);
+       		break;
+       	case CLEARBOND_INS:
+			doClearBondInstruction(item, message);
        		break;
         default:
             if (mode == SMS_MODE)

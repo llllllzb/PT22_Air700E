@@ -163,6 +163,10 @@ static void doAtdebugCmd(uint8_t *buf, uint16_t len)
     {
 		modeTryToStop();
     }
+    else if (mycmdPatch((uint8_t *)item.item_data[0], (uint8_t *)"LED"))
+    {
+		ledStatusUpdate(atoi(item.item_data[2]), atoi(item.item_data[1]));
+    }
     else if (mycmdPatch((uint8_t *)item.item_data[0], (uint8_t *)"AIDTIME"))
     {
     	uint16 year = 0;
@@ -486,7 +490,6 @@ void atCmdParserFunction(uint8_t *buf, uint16_t len)
         if (ret < 0)
         {
             ret = getCharIndex(buf, len, '\r');
-
         }
         if (ret >= 0)
         {

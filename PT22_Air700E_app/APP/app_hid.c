@@ -505,12 +505,13 @@ static void appHidHandleConnStatusCB(uint16 connHandle, uint8 changeType)
         // Reset Client Char Config if connection has dropped
         if ((changeType == LINKDB_STATUS_UPDATE_REMOVED)
                 || ((changeType == LINKDB_STATUS_UPDATE_STATEFLAGS)
-                    && (!linkDB_Up(connHandle))))
+                && (!linkDB_Up(connHandle))))
         {
             GATTServApp_InitCharCfg(connHandle, char1ClientConfig);
             GATTServApp_InitCharCfg(connHandle, hidReportClientCharCfg);
             LogPrintf(DEBUG_ALL, "ble link[%d] terminate", connHandle);
             appHidConn.connectionHandle = INVALID_CONNHANDLE;
+            appHidConn.bondFlag = 0;
         }
     }
 }
@@ -580,7 +581,14 @@ static void appHidPairStateCB(uint16_t connHandle, uint8_t state, uint8_t status
 		    {
 		        LogMessage(DEBUG_ALL, "Pairing Success");
 	            tmos_set_event(appHidTaskId, APP_HID_VERIFY_EVENT);
-	            
+	            appHidConn.bondFlag = 1;
+	            /*开启任务*/
+				if (sysinfo.kernalRun == 0)
+				{
+					wakeUpByInt(2, 3);
+					tmos_set_event(sysinfo.taskId, APP_TASK_RUN_EVENT);
+					LogPrintf(DEBUG_ALL, "device moving..");
+				}
 		    }
 		    else
 		    {
@@ -599,6 +607,14 @@ static void appHidPairStateCB(uint16_t connHandle, uint8_t state, uint8_t status
 		case GAPBOND_PAIRING_STATE_BONDED:
 			LogMessage(DEBUG_ALL, "Paring Bonded");
 			tmos_set_event(appHidTaskId, APP_HID_VERIFY_EVENT);
+			appHidConn.bondFlag = 1;
+			/*开启任务*/
+			if (sysinfo.kernalRun == 0)
+			{
+				wakeUpByInt(2, 3);
+				tmos_set_event(sysinfo.taskId, APP_TASK_RUN_EVENT);
+				LogPrintf(DEBUG_ALL, "device moving..");
+			}
 			break;
 		default :
 			LogMessage(DEBUG_ALL, "Unknow Pairing State");
@@ -607,8 +623,8 @@ static void appHidPairStateCB(uint16_t connHandle, uint8_t state, uint8_t status
 }
 
 /*
-*	GapRole状态回调函数
-*/
+ *	GapRole状态回调函数
+ */
 //#define GAPROLE_STARTED                     1       //!< Started but not advertising
 //#define GAPROLE_ADVERTISING                 2       //!< Currently Advertising
 //#define GAPROLE_WAITING                     3       //!< Device is started but not advertising, is in waiting period before advertising again
@@ -1017,7 +1033,8 @@ void appHidSendNotifyData(uint8 *data, uint16 len)
         //LogPrintf(DEBUG_ALL, "Notify success");
     }
 }
-/*解除绑定*/
+
+/* 解除单个绑定 */
 void appHidRemoveBond(uint8_t number)
 {
     uint8_t bondcount;
@@ -1036,8 +1053,22 @@ void appHidRemoveBond(uint8_t number)
     LogPrintf(DEBUG_ALL, "Ble Mac:%s", debug);
 
     memcpy(buf + 1, addr, 6);
-    buf[0] = appHidConn.addrType;
+    buf[0] = 0x01;
     GAPBondMgr_SetParameter(GAPBOND_ERASE_SINGLEBOND, 6 + 1, buf);
+}
+
+uint8_t appHidRemoveAllBond(void)
+{
+	uint8_t ret, val1, val2;
+	val1 = appHidGetBondCount();
+	ret = GAPBondMgr_SetParameter(GAPBOND_ERASE_ALLBONDS, 0, NULL);
+	val2 = appHidGetBondCount();
+	LogPrintf(DEBUG_ALL, "RemoveAllBond:%d, BondCount before %d, BondCount after:%d", ret, val1, val2);
+	if (appHidConn.connectionHandle != INVALID_CONNHANDLE)
+	{
+	    GAPRole_TerminateLink(appHidConn.connectionHandle);
+	}
+	return ret;
 }
 
 /* 断连 */
@@ -1075,14 +1106,24 @@ uint8_t appHidGetBondCount(void)
 {
     uint8_t u8Value;
     GAPBondMgr_GetParameter(GAPBOND_BOND_COUNT, &u8Value);
-    LogPrintf(DEBUG_ALL, "Bonded device count :%d", u8Value);
+    return u8Value;
 }
 
 /* 控制蓝牙开启关闭 */
 uint8_t getHidConnStatus(void)
 {
-	if (appHidConn.connectionHandle != INVALID_CONNHANDLE)
+	//如果关机了,关闭蓝牙控制
+	if (sysparam.pwrOnoff == 0)
+		return 0;
+	//如果没有绑定任何设备
+	if (appHidGetBondCount() == 0)
+		return 0;
+	//绑定设备了, 且连接上绑定的设备
+	if (appHidConn.connectionHandle != INVALID_CONNHANDLE &&
+		appHidConn.bondFlag)
 		return 1;
 	return 0;
 }
+
+
 

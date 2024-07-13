@@ -78,7 +78,8 @@ typedef struct
 	uint8_t moduleSupplyStatus		: 1;
 	uint8_t delMsgReq				: 1;
 	uint8_t sosKeyPressFlag			: 1;
-	uint8_t bleConnStatus       	: 1;
+	uint8_t soskeyOnoff				: 1;
+	uint8_t bleConnStatus       	: 1;	//1:表示蓝牙连接过3秒，设备停止工作；0:表示蓝牙断开了30s，设备开始工作
     uint8_t lbsExtendEvt;
     uint8_t wifiExtendEvt;
     uint8_t ringWakeUpTick;
@@ -144,6 +145,8 @@ typedef struct
     uint16_t mode123RunTick;//123模式已经运行的工作时长，单位秒
     uint8_t  mode123GpsFre; //123模式gps多少秒采集一次GPS定位数据
 
+    uint8_t con_tick;
+	uint8_t discon_tick;
 } SystemInfoTypedef;
 
 extern SystemInfoTypedef sysinfo;

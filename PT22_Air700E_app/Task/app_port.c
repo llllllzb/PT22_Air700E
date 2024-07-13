@@ -537,9 +537,11 @@ void GPIOA_IRQHandler(void)
     iqr = GPIOA_ReadITFlagPort();
     if (iqr & GSINT_PIN)
     {
+//    	if (sysinfo.gsensorOnoff)
+//    	{
         motionInfo.tapInterrupt++;
-        sysinfo.doMotionFlag = 1;
-        GPIOA_ClearITFlagBit(GSINT_PIN);
+        sysinfo.doMotionFlag = 1;
+//        }
        	if (GPIOA_ReadPortPin(GSINT_PIN)) 
 		{
         	GPIOA_ResetBits(GSINT_PIN);
@@ -548,6 +550,7 @@ void GPIOA_IRQHandler(void)
 	    {
 	        GPIOA_SetBits(GSINT_PIN);
 	    }
+	    GPIOA_ClearITFlagBit(GSINT_PIN);
     }
 
 	if (iqr & PWR_KEY_PIN)
@@ -592,7 +595,6 @@ void GPIOB_IRQHandler(void)
         wakeUpByInt(0, 8);
         GPIOB_ClearITFlagBit(RING_PIN);
     }
-
 }
 
 /**
@@ -628,21 +630,25 @@ void portGpioWakeupIRQHandler(void)
 		}
 		sysinfo.keyPressFlag = 0;
 	}
-	if (sysinfo.sosKeyPressFlag)
-	{
-		sysinfo.sosKeyPressFlag = 0;
-		if (SOS_KEY_READ == 0)
-		{
-			/* 开启任务 */
-			if (sysinfo.kernalRun == 0)
-			{
-				wakeUpByInt(2, 3);
-				tmos_set_event(sysinfo.taskId, APP_TASK_RUN_EVENT);
-				
-			}
-		}
-		LogPrintf(DEBUG_ALL, "sos key..");
-	}
+	//暂不需要通过soskey来唤醒
+//	if (sysinfo.sosKeyPressFlag)
+//	{
+//		sysinfo.sosKeyPressFlag = 0;
+//		if (sysparam.pwrOnoff)
+//		{
+//			if (SOS_KEY_READ == 0)
+//			{
+//				/* 开启任务 */
+//				if (sysinfo.kernalRun == 0)
+//				{
+//					wakeUpByInt(2, 3);
+//					tmos_set_event(sysinfo.taskId, APP_TASK_RUN_EVENT);
+//					
+//				}
+//			}
+//			LogPrintf(DEBUG_ALL, "sos key..");
+//		}
+//	}
 }
 
 /**
@@ -692,7 +698,9 @@ void portLedGpioCfg(uint8_t onoff)
     }
     else
     {
-		GPIOB_ModeCfg(LED1_PIN, GPIO_ModeIN_PD);
+		GPIOB_ModeCfg(LED1_PIN, GPIO_ModeOut_PP_5mA);
+		LED1_OFF;
+	    LED2_OFF;
     }
 }
 
@@ -765,20 +773,30 @@ void portPwrKeyCfg(void)
  * @return
  */
 
-void portSosKeyCfg(void)
+void portSosKeyCfg(uint8_t onoff)
 {
-	PWR_PeriphWakeUpCfg( ENABLE, RB_SLP_GPIO_WAKE, Long_Delay );
-	GPIOA_ModeCfg(SOS_KEY_PIN, GPIO_ModeIN_PU);
-	GPIOA_ITModeCfg(SOS_KEY_PIN, GPIO_ITMode_FallEdge);
-	if (GPIOA_ReadPortPin(SOS_KEY_PIN)) 
+	if (onoff)
 	{
-    	GPIOA_ResetBits(SOS_KEY_PIN);
-    }
-    else
-    {
-        GPIOA_SetBits(SOS_KEY_PIN);
-    }
-	PFIC_EnableIRQ(GPIO_A_IRQn);
+		sysinfo.soskeyOnoff = 1;
+		PWR_PeriphWakeUpCfg( ENABLE, RB_SLP_GPIO_WAKE, Long_Delay );
+		GPIOA_ModeCfg(SOS_KEY_PIN, GPIO_ModeIN_PU);
+		GPIOA_ITModeCfg(SOS_KEY_PIN, GPIO_ITMode_FallEdge);
+		if (GPIOA_ReadPortPin(SOS_KEY_PIN)) 
+		{
+	    	GPIOA_ResetBits(SOS_KEY_PIN);
+	    }
+	    else
+	    {
+	        GPIOA_SetBits(SOS_KEY_PIN);
+	    }
+		PFIC_EnableIRQ(GPIO_A_IRQn);
+	}
+	else
+	{
+	    GPIOA_ModeCfg(SOS_KEY_PIN, GPIO_ModeIN_PD);
+        R16_PA_INT_EN &= ~SOS_KEY_PIN;
+        sysinfo.soskeyOnoff = 0;
+	}
 }
 
 /**
@@ -820,7 +838,8 @@ void portGsensorPwrCtl(uint8 onoff)
     }
     else
     {
-        GPIOA_ModeCfg(GSPWR_PIN, GPIO_ModeIN_PD);
+        GPIOA_ModeCfg(GSPWR_PIN, GPIO_ModeOut_PP_20mA);
+        GPIOA_SetBits(GSPWR_PIN);
     }
 }
 

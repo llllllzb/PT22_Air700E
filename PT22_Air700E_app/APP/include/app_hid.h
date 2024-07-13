@@ -78,6 +78,7 @@ uint8_t appEnableNotifyCtl(uint16_t connHandle, uint8_t enable);
 void appHidSendNotifyData(uint8 *data, uint16 len);
 void appHidRemoveBond(uint8_t number);
 void appHidTerminalLink(void);
+uint8_t appHidRemoveAllBond(void);
 
 void appHidBroadcastCtl(uint8_t onoff);
 uint8_t getHidConnStatus(void);

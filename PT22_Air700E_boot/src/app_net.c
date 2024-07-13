@@ -143,7 +143,7 @@ void outputNode(void)
         nextnode = currentnode->nextnode;
         moduleState.cmd = currentnode->currentcmd;
         //数据发送
-        portUartSend(&usart0_ctl, (uint8_t *)currentnode->data, currentnode->datalen);
+        portUartSend(&usart3_ctl, (uint8_t *)currentnode->data, currentnode->datalen);
         if (currentnode->data[0] != 0X78 && currentnode->data[0] != 0x79 && currentnode->data[0] != 0x7E)
         {
             LogMessageWL(DEBUG_NET, currentnode->data, currentnode->datalen);
@@ -243,8 +243,9 @@ static void modulePressReleaseKey(void)
 
 static void modulePressPowerKey(void)
 {
+	LogMessage(DEBUG_ALL, "modulePressPowerKey");
     PWRKEY_LOW;
-    startTimer(1000, modulePressReleaseKey, 0);
+    startTimer(1100, modulePressReleaseKey, 0);
 }
 /**************************************************
 @bref		模组开机
@@ -257,12 +258,39 @@ void modulePowerOn(void)
 {
     LogMessage(DEBUG_ALL, "modulePowerOn");
     moduleInit();
-    portUartCfg(APPUSART0, 1, 115200, moduleRecvParser);
+    portUartCfg(APPUSART3, 1, 115200, moduleRecvParser);
     POWER_ON;
     PWRKEY_HIGH;
     RSTKEY_HIGH;
     startTimer(600, modulePressPowerKey, 0);
     socketDelAll();
+}
+
+/**************************************************
+@bref		模组关机键松开
+@param
+@return
+@note
+**************************************************/
+
+static void modulePoweroffPressDone(void)
+{
+	LogMessage(DEBUG_ALL, "modulePoweroffPressDone");
+	PWRKEY_HIGH;
+}
+
+/**************************************************
+@bref		模组关机键按下
+@param
+@return
+@note
+**************************************************/
+
+static void modulePoweroffPress(void)
+{
+	LogMessage(DEBUG_ALL, "modulePoweroffPress");
+	PWRKEY_LOW;
+	startTimer(3000, modulePoweroffPressDone, 0);
 }
 
 /**************************************************
@@ -276,24 +304,41 @@ void modulePowerOff(void)
 {
     LogMessage(DEBUG_ALL, "modulePowerOff");
     moduleInit();
-    portUartCfg(APPUSART0, 0, 115200, NULL);
+    portUartCfg(APPUSART3, 0, 115200, NULL);
     WAKEMODULE;
     RSTKEY_HIGH;
     PWRKEY_HIGH;
     POWER_OFF;
+    startTimer(500, modulePoweroffPress, 0);
 }
 
 /**************************************************
-@bref       释放复位按键
+@bref       释放复位按键松开
 @param
 @return
 @note
 **************************************************/
 
- void moduleReleaseRstkey(void)
+static void moduleRstRelease(void)
 {
+	LogMessage(DEBUG_ALL, "moduleRstRelease");
     moduleState.powerState = 1;
     RSTKEY_HIGH;
+}
+
+/**************************************************
+@bref       释放复位按键按下
+@param
+@return
+@note
+**************************************************/
+
+static void moduleRstPress(void)
+{
+	LogMessage(DEBUG_ALL, "moduleRstPress");
+    moduleState.powerState = 1;
+    RSTKEY_LOW;
+    startTimer(500, moduleRstRelease, 0);
 }
 /**************************************************
 @bref		模组复位
@@ -308,10 +353,7 @@ void moduleReset(void)
     moduleInit();
     PWRKEY_HIGH;
     RSTKEY_HIGH;
-    WAKEMODULE;
-    portUartCfg(APPUSART0, 0, 115200, NULL);
-    POWER_OFF;
-    startTimer(5000, modulePowerOn, 0);
+    startTimer(500, moduleRstPress, 0);
     socketDelAll();
 }
 
@@ -437,7 +479,7 @@ void netConnectTask(void)
                     moduleState.powerOnTick = 0;
                     sendModuleCmd(AT_CMD, NULL);
                 }
-                if (moduleState.fsmtick >= 30)
+                if (moduleState.fsmtick >= 15)
                 {
 
                     moduleCtrl.atCount++;
@@ -466,7 +508,7 @@ void netConnectTask(void)
                 {
                     sendModuleCmd(CPIN_CMD, "?");
                 }
-                if (moduleState.fsmtick >= 30)
+                if (moduleState.fsmtick >= 15)
                 {
                     moduleReset();
                 }

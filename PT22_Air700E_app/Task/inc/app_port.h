@@ -52,8 +52,8 @@
 
 //LED Éæ¼°IO
 #define LED1_PIN        GPIO_Pin_10		//PB10
-#define LED1_ON         GPIOB_SetBits(LED1_PIN)
-#define LED1_OFF        GPIOB_ResetBits(LED1_PIN)
+#define LED1_ON         GPIOB_ResetBits(LED1_PIN)
+#define LED1_OFF        GPIOB_SetBits(LED1_PIN)
 #define LED2_PIN
 #define LED2_ON
 #define LED2_OFF
@@ -136,7 +136,7 @@ void portGpsGpioCfg(uint8_t onoff);
 void portMicGpioCfg(void);
 void portLdrGpioCfg(uint8_t onoff);
 void portPwrKeyCfg(void);
-void portSosKeyCfg(void);
+void portSosKeyCfg(uint8_t onoff);
 
 
 

@@ -553,18 +553,21 @@ void moduleRequestTask(void)
 			LogMessage(DEBUG_ALL, "modulePowerOff");
 			moduleAllPinPullDown();
 		    moduleFsmChange(MODULE_FSM_CLOSE_ING1);
+		    ledStatusUpdate(SYSTEM_LED_NETOK, 0);
 		}
 		else if (sysinfo.moduleReq == MODULE_REQUEST_RESET)
 		{
 			LogMessage(DEBUG_ALL, "modulePowerReset");
 			moduleAllPinPullDown();
 			moduleFsmChange(MODULE_FSM_RESET_ING1);
+			ledStatusUpdate(SYSTEM_LED_NETOK, 0);
 		}
 		else if (sysinfo.moduleReq == MODULE_REQUEST_SHUTDOWN_OPEN)
 		{
 			LogMessage(DEBUG_ALL, "module shut down");
 			moduleAllPinPullDown();
 			moduleFsmChange(MODULE_FSM_SHUTDOWN_ING);
+			ledStatusUpdate(SYSTEM_LED_NETOK, 0);
 		}
 		moduleReqClear();
 		break;
@@ -577,7 +580,7 @@ void moduleRequestTask(void)
 		}
 		break;
 	case MODULE_FSM_CLOSE_ING2:
-		if (++sysinfo.moduleFsmTick > 30)	//2000ms
+		if (++sysinfo.moduleFsmTick > 30)	//3000ms
 		{
 			PWRKEY_HIGH;
 			LogMessage(DEBUG_ALL, "modulePowerOffDone");
@@ -1117,8 +1120,8 @@ static void cgregParser(uint8_t *buf, uint16_t len)
                             break;
                         case 3:
                             lac = strtoul(restore + 1, NULL, 16);
-//                           	LogPrintf(DEBUG_ALL, "current lac:0x%x", lac);
-//                            LogPrintf(DEBUG_ALL, "LAC=%s,0x%X", restore, moduleState.lac);
+//                          LogPrintf(DEBUG_ALL, "current lac:0x%x", lac);
+//                          LogPrintf(DEBUG_ALL, "LAC=%s,0x%X", restore, moduleState.lac);
                             break;
                         case 4:
                             cid = strtoul(restore + 1, NULL, 16);
@@ -2034,6 +2037,35 @@ uint8_t isAgpsDataRecvComplete(void)
 }
 
 /**************************************************
+@bref		模组异常复位解析
+@param
+@return
+@note
+这模组tmd有时候会在开启agps链路再断开后,与主链路发生
+交互的时候出现复位
+RDY
+
+**************************************************/
+
+static void rdyParser(uint8_t *buf, uint16_t len)
+{
+	char *rebuf;
+    int index, relen;
+    rebuf = buf;
+    relen = len;
+	if (moduleState.fsmState >= NORMAL_STATUS)
+	{
+		index = my_getstrindex((char *)rebuf, "RDY", relen);
+		if (index >= 0)
+		{
+			LogPrintf(DEBUG_ALL, "模组异常复位!!!!!!!!!!!!!!!!!!!!!!!!!!");
+			socketDelAll();
+   	 		changeProcess(AT_STATUS);
+		}
+	}
+}
+
+/**************************************************
 @bref		模组端数据接收解析器
 @param
 @return
@@ -2079,6 +2111,7 @@ void moduleRecvParser(uint8_t *buf, uint16_t bufsize)
 
     /*****************************************/
 	deactParser(dataRestore, len);
+	rdyParser(dataRestore, len);
     moduleRspSuccess();
     cmtiParser(dataRestore, len);
     cmtParser(dataRestore, len);
